@@ -48,6 +48,7 @@ delete the IPA folder.
 - Sleep PC: `sleep computer`
 - System audio mute/unmute: `sound on`, `sound off`
 - Tray controls: show/hide/start/stop/restart/exit
+- Bug report button (zips log + settings)
 - English and Spanish recognition (per-language models)
 
 ## Steam Import
