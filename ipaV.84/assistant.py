@@ -514,12 +514,12 @@ def main() -> None:
 
         tk.Button(wizard, text="Download English Model", command=lambda: _download_model(
             "en",
-            "https://github.com/copenhagenay-spec/ipaV.83/releases/download/dependency/vosk-model-small-en-us-0.15.zip",
+            "https://github.com/copenhagenay-spec/ipaV.84/releases/download/dependency/vosk-model-small-en-us-0.15.zip",
         )).grid(row=11, column=0, padx=10, pady=6, sticky="w")
 
         tk.Button(wizard, text="Download Spanish Model", command=lambda: _download_model(
             "es",
-            "https://github.com/copenhagenay-spec/ipaV.83/releases/download/dependency2/vosk-model-small-es-0.42.zip",
+            "https://github.com/copenhagenay-spec/ipaV.84/releases/download/dependency2/vosk-model-small-es-0.42.zip",
         )).grid(row=11, column=1, padx=10, pady=6, sticky="w")
 
         tk.Button(wizard, text="Import Steam Apps", command=_import_steam).grid(
