@@ -9,6 +9,9 @@ import traceback
 import os
 import time
 import zipfile
+import shutil
+import tempfile
+import urllib.request
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -97,10 +100,15 @@ class BackgroundListener:
 def _resolve_hold_key(key_name: str, keyboard):
     if not key_name:
         return None
-    mapping = {
-        "caps_lock": keyboard.Key.caps_lock,
-    }
-    return mapping.get(str(key_name).lower())
+    raw = str(key_name).strip().lower()
+    if raw.startswith("<") and raw.endswith(">"):
+        raw = raw[1:-1].strip()
+    if len(raw) == 1:
+        return keyboard.KeyCode.from_char(raw)
+    try:
+        return getattr(keyboard.Key, raw)
+    except Exception:
+        return None
 
 
 def _run_mic(seconds: int, model_path: str, confirm_fn=None, allow_prompt: bool = True):
@@ -292,6 +300,294 @@ def main() -> None:
         if not confirm_actions.get():
             return True
         return messagebox.askyesno("Confirm", prompt)
+
+    def _read_local_version() -> str:
+        try:
+            version_path = os.path.join(os.path.dirname(__file__), "VERSION")
+            if os.path.exists(version_path):
+                with open(version_path, "r", encoding="utf-8") as f:
+                    return f.read().strip()
+        except Exception:
+            pass
+        return "0.0"
+
+    def _parse_version(value: str):
+        parts = []
+        for chunk in value.replace("v", "").split("."):
+            try:
+                parts.append(int(chunk))
+            except Exception:
+                parts.append(0)
+        return tuple(parts)
+
+    def _fetch_latest_version() -> str | None:
+        url = "https://raw.githubusercontent.com/copenhagenay-spec/IPA-alpha/main/VERSION"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                return resp.read().decode("utf-8").strip()
+        except Exception:
+            return None
+
+    def _backup_current_app(backup_dir: str) -> None:
+        base_dir = os.path.dirname(__file__)
+        os.makedirs(backup_dir, exist_ok=True)
+        for name in os.listdir(base_dir):
+            if name.lower() == "data":
+                continue
+            src = os.path.join(base_dir, name)
+            dst = os.path.join(backup_dir, name)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, dst)
+
+    def _apply_update_from_zip(zip_path: str) -> None:
+        base_dir = os.path.dirname(__file__)
+        tmp_dir = tempfile.mkdtemp(prefix="ipa_update_")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(tmp_dir)
+
+        # GitHub zip extracts to a single top-level folder
+        entries = [os.path.join(tmp_dir, n) for n in os.listdir(tmp_dir)]
+        root_dir = next((p for p in entries if os.path.isdir(p)), tmp_dir)
+
+        # If repo has a nested app folder, pick the one containing assistant.py
+        candidate = None
+        for path, dirs, files in os.walk(root_dir):
+            if "assistant.py" in files:
+                candidate = path
+                break
+        src_root = candidate or root_dir
+
+        for name in os.listdir(src_root):
+            if name.lower() == "data":
+                continue
+            src = os.path.join(src_root, name)
+            dst = os.path.join(base_dir, name)
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _check_for_updates():
+        current = _read_local_version()
+        latest = _fetch_latest_version()
+        if not latest:
+            messagebox.showinfo("Update", "Could not check for updates (no connection).")
+            return
+        if _parse_version(latest) <= _parse_version(current):
+            messagebox.showinfo("Update", f"You're up to date (v{current}).")
+            return
+
+        if not messagebox.askyesno("Update Available", f"Update to v{latest}?"):
+            return
+
+        try:
+            base_dir = os.path.dirname(__file__)
+            data_dir = os.path.join(base_dir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            backup_dir = os.path.join(data_dir, f"backup_{time.strftime('%Y%m%d_%H%M%S')}")
+            _backup_current_app(backup_dir)
+
+            zip_url = "https://github.com/copenhagenay-spec/IPA-alpha/archive/refs/heads/main.zip"
+            zip_path = os.path.join(data_dir, "update.zip")
+            urllib.request.urlretrieve(zip_url, zip_path)
+            _apply_update_from_zip(zip_path)
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+
+            messagebox.showinfo("Update", "Update installed. Restarting IPA...")
+            script_path = os.path.abspath(__file__)
+            subprocess.Popen([sys.executable, script_path])
+            root.destroy()
+        except Exception as exc:
+            messagebox.showerror("Update Failed", str(exc))
+
+    def _record_hotkey(target_var: tk.StringVar) -> None:
+        try:
+            from pynput import keyboard  # type: ignore
+        except Exception:
+            messagebox.showerror("Missing Dependency", "pynput is required to record hotkeys.")
+            return
+
+        dialog = tk.Toplevel(root)
+        dialog.title("Record Hotkey")
+        dialog.geometry("320x120")
+        dialog.resizable(False, False)
+        dialog.transient(root)
+        dialog.grab_set()
+
+        info = tk.Label(dialog, text="Press a key combo (Esc to cancel)")
+        info.pack(padx=10, pady=(12, 6))
+        status = tk.StringVar(value="Waiting...")
+        tk.Label(dialog, textvariable=status).pack(padx=10, pady=(0, 10))
+
+        modifier_keys = {
+            keyboard.Key.ctrl,
+            keyboard.Key.ctrl_l,
+            keyboard.Key.ctrl_r,
+            keyboard.Key.alt,
+            keyboard.Key.alt_l,
+            keyboard.Key.alt_r,
+            keyboard.Key.shift,
+            keyboard.Key.shift_l,
+            keyboard.Key.shift_r,
+            keyboard.Key.cmd,
+            keyboard.Key.cmd_l,
+            keyboard.Key.cmd_r,
+        }
+
+        def _modifier_name(key):
+            if key in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+                return "ctrl"
+            if key in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r):
+                return "alt"
+            if key in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r):
+                return "shift"
+            if key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+                return "cmd"
+            return None
+
+        def _key_name(key):
+            if isinstance(key, keyboard.KeyCode) and key.char:
+                return key.char.lower()
+            if key == keyboard.Key.space:
+                return "<space>"
+            name = getattr(key, "name", None)
+            if name:
+                return f"<{name}>"
+            return None
+
+        pressed_mods = set()
+        last_key = {"key": None}
+
+        def _finish(combo: str | None):
+            if combo:
+                target_var.set(combo)
+                status.set(f"Captured: {combo}")
+            else:
+                status.set("Canceled")
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            dialog.after(400, dialog.destroy)
+
+        def _on_press(key):
+            if key == keyboard.Key.esc:
+                _finish(None)
+                return False
+            if key in modifier_keys:
+                name = _modifier_name(key)
+                if name:
+                    pressed_mods.add(name)
+                return
+            last_key["key"] = key
+
+        def _on_release(key):
+            if key in modifier_keys:
+                name = _modifier_name(key)
+                if name in pressed_mods:
+                    pressed_mods.remove(name)
+                return
+            if last_key["key"] == key:
+                key_name = _key_name(key)
+                if not key_name:
+                    _finish(None)
+                    return False
+                mods = []
+                if "ctrl" in pressed_mods:
+                    mods.append("<ctrl>")
+                if "alt" in pressed_mods:
+                    mods.append("<alt>")
+                if "shift" in pressed_mods:
+                    mods.append("<shift>")
+                if "cmd" in pressed_mods:
+                    mods.append("<cmd>")
+                combo = "+".join(mods + [key_name])
+                _finish(combo)
+                return False
+
+        listener = keyboard.Listener(on_press=_on_press, on_release=_on_release)
+        listener.start()
+
+    def _record_hold_key(target_var: tk.StringVar) -> None:
+        try:
+            from pynput import keyboard  # type: ignore
+        except Exception:
+            messagebox.showerror("Missing Dependency", "pynput is required to record keys.")
+            return
+
+        dialog = tk.Toplevel(root)
+        dialog.title("Record Hold Key")
+        dialog.geometry("320x120")
+        dialog.resizable(False, False)
+        dialog.transient(root)
+        dialog.grab_set()
+
+        info = tk.Label(dialog, text="Press a single key (Esc to cancel)")
+        info.pack(padx=10, pady=(12, 6))
+        status = tk.StringVar(value="Waiting...")
+        tk.Label(dialog, textvariable=status).pack(padx=10, pady=(0, 10))
+
+        modifier_keys = {
+            keyboard.Key.ctrl,
+            keyboard.Key.ctrl_l,
+            keyboard.Key.ctrl_r,
+            keyboard.Key.alt,
+            keyboard.Key.alt_l,
+            keyboard.Key.alt_r,
+            keyboard.Key.shift,
+            keyboard.Key.shift_l,
+            keyboard.Key.shift_r,
+            keyboard.Key.cmd,
+            keyboard.Key.cmd_l,
+            keyboard.Key.cmd_r,
+        }
+
+        def _key_name(key):
+            if isinstance(key, keyboard.KeyCode) and key.char:
+                return key.char.lower()
+            if key == keyboard.Key.space:
+                return "space"
+            name = getattr(key, "name", None)
+            if name:
+                return name.lower()
+            return None
+
+        def _finish(value: str | None):
+            if value:
+                target_var.set(value)
+                status.set(f"Captured: {value}")
+            else:
+                status.set("Canceled")
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            dialog.after(400, dialog.destroy)
+
+        def _on_press(key):
+            if key == keyboard.Key.esc:
+                _finish(None)
+                return False
+            if key in modifier_keys:
+                return
+            name = _key_name(key)
+            if name:
+                _finish(name)
+            else:
+                _finish(None)
+            return False
+
+        listener = keyboard.Listener(on_press=_on_press)
+        listener.start()
 
     def _load_logo():
         logo_path = os.path.join(os.path.dirname(__file__), "data", "assets", "ipa_logo.png")
@@ -522,10 +818,16 @@ def main() -> None:
         tk.Entry(wizard_content, textvariable=seconds, width=10).grid(row=6, column=1, **w_pad)
 
         tk.Label(wizard_content, text="Hotkey").grid(row=7, column=0, **w_pad)
-        tk.OptionMenu(wizard_content, hotkey, *HOTKEY_CHOICES).grid(row=7, column=1, **w_pad)
+        tk.Entry(wizard_content, textvariable=hotkey, width=18).grid(row=7, column=1, **w_pad)
+        tk.Button(wizard_content, text="Record", command=lambda: _record_hotkey(hotkey)).grid(
+            row=7, column=2, padx=10, pady=6, sticky="w"
+        )
 
         tk.Label(wizard_content, text="Hold key").grid(row=8, column=0, **w_pad)
-        tk.OptionMenu(wizard_content, holdkey, *HOLD_CHOICES).grid(row=8, column=1, **w_pad)
+        tk.Entry(wizard_content, textvariable=holdkey, width=18).grid(row=8, column=1, **w_pad)
+        tk.Button(wizard_content, text="Record", command=lambda: _record_hold_key(holdkey)).grid(
+            row=8, column=2, padx=10, pady=6, sticky="w"
+        )
 
         tk.Checkbutton(wizard_content, text="Enable Spotify media controls", variable=spotify_media).grid(
             row=9, column=0, columnspan=2, padx=10, pady=2, sticky="w"
@@ -557,12 +859,12 @@ def main() -> None:
 
         tk.Button(wizard_content, text="Download English Model", command=lambda: _download_model(
             "en",
-            "https://github.com/copenhagenay-spec/ipaV.84/releases/download/dependency/vosk-model-small-en-us-0.15.zip",
+            "https://github.com/copenhagenay-spec/IPA-alpha/releases/download/dependency/vosk-model-small-en-us-0.15.zip",
         )).grid(row=11, column=0, padx=10, pady=6, sticky="w")
 
         tk.Button(wizard_content, text="Download Spanish Model", command=lambda: _download_model(
             "es",
-            "https://github.com/copenhagenay-spec/ipaV.84/releases/download/dependency2/vosk-model-small-es-0.42.zip",
+            "https://github.com/copenhagenay-spec/IPA-alpha/releases/download/dependency2/vosk-model-small-es-0.42.zip",
         )).grid(row=11, column=1, padx=10, pady=6, sticky="w")
 
         tk.Button(wizard_content, text="Import Steam Apps", command=_import_steam).grid(
@@ -791,10 +1093,16 @@ def main() -> None:
     tk.OptionMenu(main_content, language, *LANG_CHOICES).grid(row=row, column=1, **pad)
     row += 1
     tk.Label(main_content, text="Hotkey").grid(row=row, column=0, **pad)
-    tk.OptionMenu(main_content, hotkey, *HOTKEY_CHOICES).grid(row=row, column=1, **pad)
+    tk.Entry(main_content, textvariable=hotkey, width=18).grid(row=row, column=1, **pad)
+    tk.Button(main_content, text="Record", command=lambda: _record_hotkey(hotkey)).grid(
+        row=row, column=2, padx=10, pady=6, sticky="w"
+    )
     row += 1
     tk.Label(main_content, text="Hold key").grid(row=row, column=0, **pad)
-    tk.OptionMenu(main_content, holdkey, *HOLD_CHOICES).grid(row=row, column=1, **pad)
+    tk.Entry(main_content, textvariable=holdkey, width=18).grid(row=row, column=1, **pad)
+    tk.Button(main_content, text="Record", command=lambda: _record_hold_key(holdkey)).grid(
+        row=row, column=2, padx=10, pady=6, sticky="w"
+    )
     row += 1
     tk.Label(main_content, text="Search Engine URL").grid(row=row, column=0, **pad)
     tk.Entry(main_content, textvariable=search_engine, width=45).grid(row=row, column=1, **pad)
@@ -841,6 +1149,10 @@ def main() -> None:
     )
     tk.Button(main_content, text="Stop Background", command=_stop_background).grid(
         row=row, column=1, padx=10, pady=6, sticky="w"
+    )
+    row += 1
+    tk.Button(main_content, text="Check for Updates", command=_check_for_updates).grid(
+        row=row, column=0, padx=10, pady=6, sticky="w"
     )
     row += 1
     ttk.Separator(main_content, orient="horizontal").grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=6)
