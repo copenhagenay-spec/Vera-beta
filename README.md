@@ -54,7 +54,10 @@ delete the IPA folder.
 - Timers: say `set a timer 5 minutes`
 - Notes: `note ...`, `open notes`, `delete last note`, `clear all notes`
 - Sleep PC: `sleep computer`
+- Restart IPA: `restart assistant`
+- Type text: `type <text>` (simulates keyboard input)
 - System audio mute/unmute: `sound on`, `sound off`
+- Mouse side buttons supported as push-to-talk key (record via Hold key button)
 - Tray controls: show/hide/start/stop/restart/exit
 - Bug report button (zips log + settings)
 - Check for updates (downloads latest from GitHub)
