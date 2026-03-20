@@ -333,6 +333,13 @@ def _youtube_search(query: str) -> bool:
 
 
 _MISHEAR_MAP = {
+    # youtube variants
+    "of a new job": "open youtube",
+    "oh finish your job": "open youtube",
+    "often you tube": "open youtube",
+    "often youtube": "open youtube",
+    "open the you tube": "open youtube",
+    "open the youtube": "open youtube",
     "your job": "youtube",
     "you tube": "youtube",
     "you to": "youtube",
@@ -340,10 +347,11 @@ _MISHEAR_MAP = {
     "utube": "youtube",
     "u tube": "youtube",
     "your tube": "youtube",
-    "your job": "youtube",
+    # spotify variants
     "spotty": "spotify",
     "spot if i": "spotify",
     "spot ify": "spotify",
+    # search variants
     "any may": "anime",
     "any me": "anime",
     "anymay": "anime",
@@ -351,7 +359,8 @@ _MISHEAR_MAP = {
 
 def _apply_mishear_corrections(text: str) -> str:
     t = text.lower()
-    for mishear, correction in _MISHEAR_MAP.items():
+    # Apply longest phrases first to avoid partial replacements
+    for mishear, correction in sorted(_MISHEAR_MAP.items(), key=lambda x: -len(x[0])):
         t = t.replace(mishear, correction)
     return t
 
@@ -706,6 +715,8 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None) -> 
     open_match = re.search(r"\b(open|launch|start)\s+(.+)$", t)
     if open_match:
         app = open_match.group(2).strip()
+        # Strip leading "the" inserted by accent mishears (e.g. "open the youtube")
+        app = re.sub(r"^the\s+", "", app)
         return _open_app(app, allow_prompt, confirm_fn=confirm_fn)
 
     search_match = re.search(r"\b(search|look up|lookup|find)(\s+(for\s+)?(.+))?$", t)

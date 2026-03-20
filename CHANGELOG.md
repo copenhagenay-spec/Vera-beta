@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.6
+- Expanded mishear corrections with additional Scottish English accent variants for YouTube and other commands.
+- General fix for "open the <app>" — leading "the" is now stripped before app lookup.
+
 ## 0.84.5
 - Added mishear corrections for common speech recognition variants (e.g. "your job" → "youtube").
 
