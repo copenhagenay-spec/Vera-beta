@@ -4,19 +4,26 @@ Offline personal assistant for Windows using Vosk (speech to text).
 
 ## Quick Start
 
-1. Install Python 3.10+:
+1. Install Python 3.10+ (standalone installer):
    https://www.python.org/downloads/
-2. Double-click:
-   `run_ipa.cmd`
-3. The first-run wizard will open:
+   - Make sure to check **"Add Python to PATH"** during install
+2. Double-click `setup.cmd` to install dependencies (one-time)
+3. Double-click `run_ipa.vbs` (no terminal)
+4. The first-run wizard will open:
    - Choose **Language** (English or Spanish)
    - Choose **Mode** (Hold-to-talk, Hotkey, or Timed)
-   - Click **Install Dependencies** (one-time)
    - If you don't have a model yet, click **Download English/Spanish Model**
    - Optional: **Import Steam Apps**
    - Click **Finish**
 
 IPA will start listening in the background after the wizard finishes.
+
+## Troubleshooting
+
+- If the app doesn't open, run `run_ipa.cmd` to see errors in the terminal.
+- If nothing is transcribed, check Windows microphone permissions and input device.
+- If hotkey/hold doesn't work, make sure dependencies are installed and restart IPA.
+- Crash logs are saved to `data/logs/assistant.log`.
 
 ## Uninstall
 
@@ -37,6 +44,7 @@ delete the IPA folder.
 
 ## Features
 
+- Help: say `what can I say` to show all available voice commands
 - Open apps: say `open <app>`
 - App aliases: say an alias to open a target app
 - Custom actions: phrase -> command
@@ -49,6 +57,7 @@ delete the IPA folder.
 - System audio mute/unmute: `sound on`, `sound off`
 - Tray controls: show/hide/start/stop/restart/exit
 - Bug report button (zips log + settings)
+- Check for updates (downloads latest from GitHub)
 - English and Spanish recognition (per-language models)
 
 ## Steam Import
@@ -75,3 +84,4 @@ Small Spanish model example:
 
 - If audio isn't detected, check Windows microphone permissions.
 - If a command doesn't trigger, check **Last Transcript** for misheard words and add aliases.
+- You can use **Delete Cache** in the UI if you ever want to remove Python `__pycache__` folders.

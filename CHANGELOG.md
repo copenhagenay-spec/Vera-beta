@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.4
+- Added `setup.cmd` for installing dependencies without needing the UI (fixes fresh install bootstrapping).
+- Updated README with clearer install steps including standalone Python and PATH instructions.
+
 ## 0.84.3
 - Fixed update check failing silently — now shows the actual error message.
 - Fixed VERSION URL pointing to wrong path on GitHub.
