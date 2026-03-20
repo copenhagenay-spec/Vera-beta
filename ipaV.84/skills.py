@@ -353,11 +353,10 @@ _MISHEAR_MAP = {
     "open the youtube": "open youtube",
     "start your job": "open youtube",
     "start you tube": "open youtube",
+    "start you do": "open youtube",
     "start youtube": "open youtube",
     "your job": "youtube",
     "you tube": "youtube",
-    "you to": "youtube",
-    "you too": "youtube",
     "utube": "youtube",
     "u tube": "youtube",
     "your tube": "youtube",
@@ -373,9 +372,9 @@ _MISHEAR_MAP = {
 
 def _apply_mishear_corrections(text: str) -> str:
     t = text.lower()
-    # Apply longest phrases first to avoid partial replacements
+    # Apply longest phrases first, use word boundaries to avoid partial replacements
     for mishear, correction in sorted(_MISHEAR_MAP.items(), key=lambda x: -len(x[0])):
-        t = t.replace(mishear, correction)
+        t = re.sub(r'\b' + re.escape(mishear) + r'\b', correction, t)
     return t
 
 

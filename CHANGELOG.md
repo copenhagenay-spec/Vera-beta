@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.84.6.3
+- Fixed YouTube commands not triggering due to mishear map corrupting the word "youtube".
+- Added "start you do" and "start you tube" as YouTube mishear variants.
+- Removed false positive mishear entries that were corrupting normal speech.
+
 ## 0.84.6.2
 - Added transcript history — last 10 transcripts shown live in the UI (newest first).
 - All raw transcripts now logged to `data/logs/transcripts.log`.
