@@ -180,6 +180,12 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
         side="left", padx=4
     )
 
+    ctk.CTkLabel(main_scroll, text="Transcript History", font=("Segoe UI", 13, "bold")).pack(
+        anchor="w", padx=12, pady=(14, 4)
+    )
+    history_textbox = ctk.CTkTextbox(main_scroll, height=150, state="disabled")
+    history_textbox.pack(fill="x", padx=12, pady=(0, 10))
+
     status_frame = ctk.CTkFrame(root)
     status_frame.pack(fill="x", padx=10, pady=(4, 10))
     status_left = ctk.CTkFrame(status_frame, fg_color="transparent")
@@ -315,5 +321,6 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
         "apps_textbox": apps_textbox,
         "aliases_textbox": aliases_textbox,
         "actions_textbox": actions_textbox,
+        "history_textbox": history_textbox,
         "tabview": tabview,
     }

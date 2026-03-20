@@ -48,6 +48,17 @@ def _log_event(message: str) -> None:
     except Exception:
         pass
 
+def _log_transcript(text: str) -> None:
+    try:
+        base_dir = os.path.dirname(__file__)
+        logs_dir = os.path.join(base_dir, "data", "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        log_path = os.path.join(logs_dir, "transcripts.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text.strip()}\n")
+    except Exception:
+        pass
+
 def _append_note(text: str) -> bool:
     try:
         notes_path = _notes_path()
@@ -559,6 +570,7 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None) -> 
     Try to match transcript to skills.
     Returns True if a skill handled it.
     """
+    _log_transcript(text)
     t = _apply_mishear_corrections(text.strip().lower())
     if not t:
         return False

@@ -720,7 +720,7 @@ def main() -> None:
             def _run():
                 text = _run_mic(secs, _model_dir(), confirm_fn=_confirm_prompt, allow_prompt=True)
                 if text:
-                    root.after(0, lambda: transcript_var.set(text))
+                    root.after(0, lambda: _update_transcript(text))
             threading.Thread(target=_run, daemon=True).start()
         elif mode.get() == "hold":
             messagebox.showinfo("Hold Mode", "Hold mode only runs in the background.")
@@ -738,7 +738,7 @@ def main() -> None:
                     holdkey.get(),
                     model_path=_model_dir(),
                     confirm_fn=_confirm_prompt,
-                    on_text=lambda t: root.after(0, lambda: transcript_var.set(t)),
+                    on_text=lambda t: root.after(0, lambda: _update_transcript(t)),
                 )
                 status_var.set(f"Listening (hold {holdkey.get()})")
             elif mode.get() == "hotkey":
@@ -747,7 +747,7 @@ def main() -> None:
                     secs,
                     model_path=_model_dir(),
                     confirm_fn=_confirm_prompt,
-                    on_text=lambda t: root.after(0, lambda: transcript_var.set(t)),
+                    on_text=lambda t: root.after(0, lambda: _update_transcript(t)),
                 )
                 status_var.set(f"Listening (hotkey {hotkey.get()})")
             else:
@@ -894,6 +894,7 @@ def main() -> None:
 
         config_path = os.path.join(data_dir, "config.json")
         log_path = os.path.join(logs_dir, "assistant.log")
+        transcripts_path = os.path.join(logs_dir, "transcripts.log")
         ts = time.strftime("%Y%m%d_%H%M%S")
         zip_path = os.path.join(logs_dir, f"bug_report_{ts}.zip")
 
@@ -905,6 +906,9 @@ def main() -> None:
                     files_added += 1
                 if os.path.exists(log_path):
                     zf.write(log_path, arcname="assistant.log")
+                    files_added += 1
+                if os.path.exists(transcripts_path):
+                    zf.write(transcripts_path, arcname="transcripts.log")
                     files_added += 1
             if files_added == 0:
                 try:
@@ -998,6 +1002,20 @@ def main() -> None:
     apps_textbox = widgets.get("apps_textbox")
     aliases_textbox = widgets.get("aliases_textbox")
     actions_textbox = widgets.get("actions_textbox")
+    history_textbox = widgets.get("history_textbox")
+    transcript_history = []
+
+    def _update_transcript(text: str):
+        transcript_var.set(text)
+        transcript_history.append(f"{time.strftime('%H:%M:%S')}  {text}")
+        if len(transcript_history) > 10:
+            transcript_history.pop(0)
+        if history_textbox is not None:
+            history_textbox.configure(state="normal")
+            history_textbox.delete("1.0", "end")
+            for line in reversed(transcript_history):
+                history_textbox.insert("end", line + "\n")
+            history_textbox.configure(state="disabled")
     # =========================================================================
     #  Init
     # =========================================================================

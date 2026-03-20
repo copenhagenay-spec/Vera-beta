@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.84.6.2
+- Added transcript history — last 10 transcripts shown live in the UI (newest first).
+- All raw transcripts now logged to `data/logs/transcripts.log`.
+- Bug reports now include `transcripts.log`.
+
 ## 0.84.6.1
 - Added "start youtube", "start you tube", and "start your job" as YouTube trigger phrases.
 
