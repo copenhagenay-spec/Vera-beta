@@ -1,0 +1,92 @@
+
+=== Assistant Crash ===
+Traceback (most recent call last):
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 1000, in <module>
+    main()
+    ~~~~^^
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 713, in main
+    tabview = ctk.CTkTabview(root)
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_tabview.py", line 78, in __init__
+    self._segmented_button = CTkSegmentedButton(self,
+                             ~~~~~~~~~~~~~~~~~~^^^^^^
+                                                values=[],
+                                                ^^^^^^^^^^
+    ...<10 lines>...
+                                                command=self._segmented_button_callback,
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                state=state)
+                                                ^^^^^^^^^^^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_segmented_button.py", line 65, in __init__
+    self._font = CTkFont() if font is None else font
+                 ~~~~~~~^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\font\ctk_font.py", line 37, in __init__
+    self._size = ThemeManager.theme["CTkFont"]["size"] if size is None else size
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'CTkFont'
+
+
+=== Assistant Crash ===
+Traceback (most recent call last):
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 1000, in <module>
+    main()
+    ~~~~^^
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 713, in main
+    tabview = ctk.CTkTabview(root)
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_tabview.py", line 78, in __init__
+    self._segmented_button = CTkSegmentedButton(self,
+                             ~~~~~~~~~~~~~~~~~~^^^^^^
+                                                values=[],
+                                                ^^^^^^^^^^
+    ...<10 lines>...
+                                                command=self._segmented_button_callback,
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                state=state)
+                                                ^^^^^^^^^^^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_segmented_button.py", line 65, in __init__
+    self._font = CTkFont() if font is None else font
+                 ~~~~~~~^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\font\ctk_font.py", line 37, in __init__
+    self._size = ThemeManager.theme["CTkFont"]["size"] if size is None else size
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'CTkFont'
+
+
+=== Assistant Crash ===
+Traceback (most recent call last):
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 1000, in <module>
+    main()
+    ~~~~^^
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 713, in main
+    tabview = ctk.CTkTabview(root)
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_tabview.py", line 78, in __init__
+    self._segmented_button = CTkSegmentedButton(self,
+                             ~~~~~~~~~~~~~~~~~~^^^^^^
+                                                values=[],
+                                                ^^^^^^^^^^
+    ...<10 lines>...
+                                                command=self._segmented_button_callback,
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                state=state)
+                                                ^^^^^^^^^^^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_segmented_button.py", line 65, in __init__
+    self._font = CTkFont() if font is None else font
+                 ~~~~~~~^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\font\ctk_font.py", line 37, in __init__
+    self._size = ThemeManager.theme["CTkFont"]["size"] if size is None else size
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'CTkFont'
+
+
+=== Assistant Crash ===
+Traceback (most recent call last):
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 1000, in <module>
+    main()
+    ~~~~^^
+  File "C:\Repos\COPES-TOOLS\IPA-dev\ipaV.84\ipaV.84\assistant.py", line 740, in main
+    ctk.CTkRadioButton(mode_row, text="Timed mic", variable=mode, value="mic").pack(
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Owner\AppData\Roaming\Python\Python314\site-packages\customtkinter\windows\widgets\ctk_radiobutton.py", line 66, in __init__
+    self._text_color_disabled = ThemeManager.theme["CTkRadioButton"]["text_color_disabled"] if text_color_disabled is None else self._check_color_type(text_color_disabled)
+                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'text_color_disabled'
+
