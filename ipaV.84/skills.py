@@ -354,9 +354,21 @@ _MISHEAR_MAP = {
     "start your job": "open youtube",
     "start you tube": "open youtube",
     "start you do": "open youtube",
+    "start you did": "open youtube",
     "start youtube": "open youtube",
+    "but open you tube": "open youtube",
+    "the you tube": "open youtube",
+    "open you did": "open youtube",
+    "open you do": "open youtube",
+    "open he did": "open youtube",
+    "open needed": "open youtube",
+    "open needs him": "open youtube",
+    "open need to": "open youtube",
+    "open into": "open youtube",
     "your job": "youtube",
     "you tube": "youtube",
+    "you did": "youtube",
+    "you do": "youtube",
     "utube": "youtube",
     "u tube": "youtube",
     "your tube": "youtube",
@@ -370,12 +382,30 @@ _MISHEAR_MAP = {
     "anymay": "anime",
 }
 
+_FUZZY_TARGETS = {
+    "youtube": 0.75,
+    "spotify": 0.80,
+}
+
 def _apply_mishear_corrections(text: str) -> str:
     t = text.lower()
-    # Apply longest phrases first, use word boundaries to avoid partial replacements
+    # Apply explicit map first (longest phrases first, word boundaries)
     for mishear, correction in sorted(_MISHEAR_MAP.items(), key=lambda x: -len(x[0])):
         t = re.sub(r'\b' + re.escape(mishear) + r'\b', correction, t)
-    return t
+
+    # Fuzzy pass: check each individual word against key targets
+    words = t.split()
+    result = []
+    for word in words:
+        replaced = False
+        for target, cutoff in _FUZZY_TARGETS.items():
+            if word != target and difflib.SequenceMatcher(None, word, target).ratio() >= cutoff:
+                result.append(target)
+                replaced = True
+                break
+        if not replaced:
+            result.append(word)
+    return " ".join(result)
 
 
 def _normalize_text(value: str) -> str:
@@ -513,6 +543,8 @@ def _show_help() -> None:
         "",
         "System:",
         "  sleep computer",
+        "  restart assistant",
+        "  type <text>",
         "",
         "Help:",
         "  what can i say",
@@ -564,7 +596,20 @@ def _show_help() -> None:
         print(f"Help display failed: {exc}")
 
 
-def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None) -> bool:
+def _type_text(text: str) -> bool:
+    try:
+        from pynput.keyboard import Controller  # type: ignore
+        time.sleep(0.3)
+        Controller().type(text)
+        _log_event(f"TYPE_TEXT: {text}")
+        return True
+    except Exception as exc:
+        print(f"Failed to type text: {exc}")
+        _log_event(f"TYPE_TEXT_FAILED: {exc}")
+        return False
+
+
+def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, restart_fn=None) -> bool:
     """
     Try to match transcript to skills.
     Returns True if a skill handled it.
@@ -577,6 +622,20 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None) -> 
     # Help
     if re.search(r"\b(what can i say|show commands|show help|list commands)\b", t):
         _show_help()
+        return True
+
+    # Restart IPA
+    if re.search(r"\b(restart|reboot)\s+(ipa|assistant|the assistant)\b", t):
+        _log_event("RESTART_IPA: voice command")
+        if restart_fn is not None:
+            threading.Thread(target=restart_fn, daemon=True).start()
+        return True
+
+    # Type text
+    type_match = re.search(r"\btype\s+(.+)$", t)
+    if type_match:
+        text_to_type = type_match.group(1).strip()
+        _type_text(text_to_type)
         return True
 
     # Notes
@@ -731,6 +790,10 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None) -> 
         app = open_match.group(2).strip()
         # Strip leading "the" inserted by accent mishears (e.g. "open the youtube")
         app = re.sub(r"^the\s+", "", app)
+        # If app is a single unknown word and fuzzy-matches "youtube", open it
+        if " " not in app and difflib.SequenceMatcher(None, app, "youtube").ratio() >= 0.6:
+            if _youtube_search(""):
+                return True
         return _open_app(app, allow_prompt, confirm_fn=confirm_fn)
 
     search_match = re.search(r"\b(search|look up|lookup|find)(\s+(for\s+)?(.+))?$", t)

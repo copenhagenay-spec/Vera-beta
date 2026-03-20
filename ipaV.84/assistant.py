@@ -57,11 +57,11 @@ class BackgroundListener:
         self.stop_event.clear()
         self.recording_flag.clear()
 
-    def start_hotkey(self, hotkey: str, seconds: int, model_path: str, confirm_fn, on_text=None):
+    def start_hotkey(self, hotkey: str, seconds: int, model_path: str, confirm_fn, on_text=None, restart_fn=None):
         from pynput import keyboard  # type: ignore
 
         def _record():
-            text = _run_mic(seconds, model_path, confirm_fn=confirm_fn, allow_prompt=False)
+            text = _run_mic(seconds, model_path, confirm_fn=confirm_fn, allow_prompt=False, restart_fn=restart_fn)
             if on_text and text:
                 on_text(text)
 
@@ -73,33 +73,54 @@ class BackgroundListener:
         self.listener = keyboard.GlobalHotKeys({str(hotkey): _on_activate})
         self.listener.start()
 
-    def start_hold(self, hold_key: str, model_path: str, confirm_fn, on_text=None):
+    def start_hold(self, hold_key: str, model_path: str, confirm_fn, on_text=None, restart_fn=None):
         from pynput import keyboard  # type: ignore
 
-        key_obj = _resolve_hold_key(hold_key, keyboard)
-        if not key_obj:
-            raise ValueError("Invalid hold key")
-
         def _record():
-            text = _run_hold(self.stop_event, hold_key, model_path, confirm_fn=confirm_fn)
+            text = _run_hold(self.stop_event, hold_key, model_path, confirm_fn=confirm_fn, restart_fn=restart_fn)
             if on_text and text:
                 on_text(text)
             self.recording_flag.clear()
             self.stop_event.clear()
 
-        def _on_press(key):
-            if key == key_obj and not self.recording_flag.is_set():
-                self.recording_flag.set()
-                threading.Thread(target=_record, daemon=True).start()
+        if _is_mouse_button(hold_key):
+            from pynput import mouse  # type: ignore
+            button_obj = _resolve_mouse_button(hold_key, mouse)
+            if not button_obj:
+                raise ValueError("Invalid mouse button")
 
-        def _on_release(key):
-            if key == key_obj and self.recording_flag.is_set():
-                self.stop_event.set()
+            def _on_click(x, y, button, pressed):
+                if button != button_obj:
+                    return
+                if pressed and not self.recording_flag.is_set():
+                    self.recording_flag.set()
+                    threading.Thread(target=_record, daemon=True).start()
+                elif not pressed and self.recording_flag.is_set():
+                    self.stop_event.set()
 
-        self.stop()
-        self.mode = "hold"
-        self.listener = keyboard.Listener(on_press=_on_press, on_release=_on_release)
-        self.listener.start()
+            self.stop()
+            self.mode = "hold"
+            self.listener = mouse.Listener(on_click=_on_click)
+            self.listener.start()
+
+        else:
+            key_obj = _resolve_hold_key(hold_key, keyboard)
+            if not key_obj:
+                raise ValueError("Invalid hold key")
+
+            def _on_press(key):
+                if key == key_obj and not self.recording_flag.is_set():
+                    self.recording_flag.set()
+                    threading.Thread(target=_record, daemon=True).start()
+
+            def _on_release(key):
+                if key == key_obj and self.recording_flag.is_set():
+                    self.stop_event.set()
+
+            self.stop()
+            self.mode = "hold"
+            self.listener = keyboard.Listener(on_press=_on_press, on_release=_on_release)
+            self.listener.start()
 
 
 def _resolve_hold_key(key_name: str, keyboard):
@@ -116,11 +137,24 @@ def _resolve_hold_key(key_name: str, keyboard):
         return None
 
 
-def _run_mic(seconds: int, model_path: str, confirm_fn=None, allow_prompt: bool = True):
+def _is_mouse_button(key_name: str) -> bool:
+    return str(key_name).strip().lower() in ("x1", "x2")
+
+
+def _resolve_mouse_button(key_name: str, mouse):
+    raw = str(key_name).strip().lower()
+    if raw == "x1":
+        return mouse.Button.x1
+    if raw == "x2":
+        return mouse.Button.x2
+    return None
+
+
+def _run_mic(seconds: int, model_path: str, confirm_fn=None, allow_prompt: bool = True, restart_fn=None):
     try:
         text = transcribe_mic(seconds=seconds, model_path=model_path)
         if text:
-            handle_transcript(text, allow_prompt=allow_prompt, confirm_fn=confirm_fn)
+            handle_transcript(text, allow_prompt=allow_prompt, confirm_fn=confirm_fn, restart_fn=restart_fn)
         return text
     except MissingDependencyError as exc:
         messagebox.showerror("Missing Dependency", str(exc))
@@ -129,11 +163,11 @@ def _run_mic(seconds: int, model_path: str, confirm_fn=None, allow_prompt: bool 
     return ""
 
 
-def _run_hold(stop_event: threading.Event, hold_key: str, model_path: str, confirm_fn=None):
+def _run_hold(stop_event: threading.Event, hold_key: str, model_path: str, confirm_fn=None, restart_fn=None):
     try:
         text = transcribe_mic_hold(stop_event=stop_event, model_path=model_path)
         if text:
-            handle_transcript(text, allow_prompt=False, confirm_fn=confirm_fn)
+            handle_transcript(text, allow_prompt=False, confirm_fn=confirm_fn, restart_fn=restart_fn)
         return text
     except MissingDependencyError as exc:
         messagebox.showerror("Missing Dependency", str(exc))
@@ -274,6 +308,17 @@ def main() -> None:
         if not confirm_actions.get():
             return True
         return messagebox.askyesno("Confirm", prompt)
+
+    def _do_restart():
+        try:
+            listener.stop()
+            if tray_icon["icon"] is not None:
+                tray_icon["icon"].stop()
+            script_path = os.path.abspath(__file__)
+            subprocess.Popen([sys.executable, script_path])
+            root.after(0, root.destroy)
+        except Exception as exc:
+            print(f"Restart failed: {exc}")
 
     def _read_local_version() -> str:
         try:
@@ -506,18 +551,19 @@ def main() -> None:
     def _record_hold_key(target_var: tk.StringVar) -> None:
         try:
             from pynput import keyboard  # type: ignore
+            from pynput import mouse as pynput_mouse  # type: ignore
         except Exception:
             messagebox.showerror("Missing Dependency", "pynput is required to record keys.")
             return
 
         dialog = tk.Toplevel(root)
         dialog.title("Record Hold Key")
-        dialog.geometry("320x120")
+        dialog.geometry("340x130")
         dialog.resizable(False, False)
         dialog.transient(root)
         dialog.grab_set()
 
-        info = tk.Label(dialog, text="Press a single key (Esc to cancel)")
+        info = tk.Label(dialog, text="Press a key or side mouse button (Esc to cancel)")
         info.pack(padx=10, pady=(12, 6))
         status = tk.StringVar(value="Waiting...")
         tk.Label(dialog, textvariable=status).pack(padx=10, pady=(0, 10))
@@ -547,14 +593,19 @@ def main() -> None:
                 return name.lower()
             return None
 
-        def _finish(value: str | None):
+        active = {"kb": None, "ms": None}
+
+        def _finish(value: str | None, display: str | None = None):
             if value:
                 target_var.set(value)
-                status.set(f"Captured: {value}")
+                status.set(f"Captured: {display or value}")
             else:
                 status.set("Canceled")
             try:
-                listener.stop()
+                if active["kb"]:
+                    active["kb"].stop()
+                if active["ms"]:
+                    active["ms"].stop()
             except Exception:
                 pass
             dialog.after(400, dialog.destroy)
@@ -572,8 +623,20 @@ def main() -> None:
                 _finish(None)
             return False
 
-        listener = keyboard.Listener(on_press=_on_press)
-        listener.start()
+        def _on_click(x, y, button, pressed):
+            if not pressed:
+                return
+            if button == pynput_mouse.Button.x1:
+                _finish("x1", "Mouse Back (x1)")
+                return False
+            elif button == pynput_mouse.Button.x2:
+                _finish("x2", "Mouse Fwd (x2)")
+                return False
+
+        active["kb"] = keyboard.Listener(on_press=_on_press)
+        active["kb"].start()
+        active["ms"] = pynput_mouse.Listener(on_click=_on_click)
+        active["ms"].start()
 
     def _load_logo():
         logo_path = os.path.join(os.path.dirname(__file__), "data", "assets", "ipa_logo.png")
@@ -718,7 +781,7 @@ def main() -> None:
             secs = 5
         if mode.get() == "mic":
             def _run():
-                text = _run_mic(secs, _model_dir(), confirm_fn=_confirm_prompt, allow_prompt=True)
+                text = _run_mic(secs, _model_dir(), confirm_fn=_confirm_prompt, allow_prompt=True, restart_fn=_do_restart)
                 if text:
                     root.after(0, lambda: _update_transcript(text))
             threading.Thread(target=_run, daemon=True).start()
@@ -739,6 +802,7 @@ def main() -> None:
                     model_path=_model_dir(),
                     confirm_fn=_confirm_prompt,
                     on_text=lambda t: root.after(0, lambda: _update_transcript(t)),
+                    restart_fn=_do_restart,
                 )
                 status_var.set(f"Listening (hold {holdkey.get()})")
             elif mode.get() == "hotkey":
@@ -748,6 +812,7 @@ def main() -> None:
                     model_path=_model_dir(),
                     confirm_fn=_confirm_prompt,
                     on_text=lambda t: root.after(0, lambda: _update_transcript(t)),
+                    restart_fn=_do_restart,
                 )
                 status_var.set(f"Listening (hotkey {hotkey.get()})")
             else:

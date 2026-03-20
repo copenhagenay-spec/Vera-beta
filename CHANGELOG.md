@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.84.6.4
+- Added "restart assistant" voice command — restarts IPA instantly.
+- Added "type <text>" voice command — simulates keyboard input of any text.
+- Added mouse side button (back/forward) support for push-to-talk — record via the Hold key Record button.
+
 ## 0.84.6.3
 - Fixed YouTube commands not triggering due to mishear map corrupting the word "youtube".
 - Added "start you do" and "start you tube" as YouTube mishear variants.
