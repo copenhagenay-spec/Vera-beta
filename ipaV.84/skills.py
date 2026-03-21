@@ -543,6 +543,8 @@ def _show_help() -> None:
         "",
         "System:",
         "  sleep computer",
+        "  restart computer",
+        "  shut down computer",
         "  restart assistant",
         "  type <text>",
         "  send message <text>",
@@ -1045,6 +1047,26 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
         else:
             print("No note text provided.")
             _log_event("NOTE_SKIPPED: no text")
+        return True
+
+    # Restart PC
+    if re.search(r"\b(restart (the )?(pc|computer)|reboot (the )?(pc|computer))\b", t):
+        if confirm_fn and not confirm_fn("Restart the computer?"):
+            return True
+        try:
+            _run_command("shutdown /r /t 5")
+        except Exception as exc:
+            _log_event(f"RESTART_PC_FAILED: {exc}")
+        return True
+
+    # Shutdown PC
+    if re.search(r"\b(shut down|shutdown|turn off|power off) (the )?(pc|computer)\b", t):
+        if confirm_fn and not confirm_fn("Shut down the computer?"):
+            return True
+        try:
+            _run_command("shutdown /s /t 5")
+        except Exception as exc:
+            _log_event(f"SHUTDOWN_PC_FAILED: {exc}")
         return True
 
     # Sleep command (Windows)

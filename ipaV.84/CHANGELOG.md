@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.84.8.5
+- Restart PC — say "restart computer" or "reboot computer" (5 second delay)
+- Shutdown PC — say "shut down computer" or "power off computer" (5 second delay)
+
 ## 0.84.8.4
 - AI now knows the current time as well as the date
 - Bug report now offers to clear logs after zipping
