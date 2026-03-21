@@ -108,14 +108,36 @@ class BackgroundListener:
             if not key_obj:
                 raise ValueError("Invalid hold key")
 
+            # Caps Lock suppression — local only, never pushed to public build
+            _caps_desired = {"state": None}
+
             def _on_press(key):
                 if key == key_obj and not self.recording_flag.is_set():
+                    if key == keyboard.Key.caps_lock:
+                        try:
+                            import ctypes
+                            current = ctypes.windll.user32.GetKeyState(0x14) & 0x0001
+                            _caps_desired["state"] = 0 if current else 1
+                        except Exception:
+                            pass
                     self.recording_flag.set()
                     threading.Thread(target=_record, daemon=True).start()
 
             def _on_release(key):
                 if key == key_obj and self.recording_flag.is_set():
                     self.stop_event.set()
+                    if key == keyboard.Key.caps_lock and _caps_desired["state"] is not None:
+                        desired = _caps_desired["state"]
+                        def _restore():
+                            import time as _time
+                            import ctypes as _ctypes
+                            _time.sleep(0.15)
+                            current = _ctypes.windll.user32.GetKeyState(0x14) & 0x0001
+                            if current != desired:
+                                _ctypes.windll.user32.keybd_event(0x14, 0, 0, 0)
+                                _ctypes.windll.user32.keybd_event(0x14, 0, 2, 0)
+                        threading.Thread(target=_restore, daemon=True).start()
+                        _caps_desired["state"] = None
 
             self.stop()
             self.mode = "hold"
@@ -1086,6 +1108,13 @@ def main() -> None:
             os.startfile(logs_dir)
         except Exception:
             pass
+        if messagebox.askyesno("Bug Report", "Would you like to clear the current logs to save space?"):
+            try:
+                for log_file in (log_path, transcripts_path):
+                    if os.path.exists(log_file):
+                        open(log_file, "w").close()
+            except Exception:
+                pass
 
     def _clear_pycache():
         base_dir = os.path.dirname(__file__)

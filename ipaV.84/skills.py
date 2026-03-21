@@ -672,8 +672,9 @@ def _ask_ai(question: str) -> bool:
         return False
 
     today = time.strftime("%B %d, %Y")
+    now = time.strftime("%I:%M %p")
     prompt = (
-        f"Today's date is {today}.\n\n"
+        f"Today's date is {today} and the current time is {now}.\n\n"
         f"{question.strip()}\n\n"
         "Answer in 2 to 3 sentences maximum. Be direct and concise."
     )

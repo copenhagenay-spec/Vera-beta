@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.84.8.4
+- AI now knows the current time as well as the date
+- Bug report now offers to clear logs after zipping
+
+## 0.84.8.3
+- Caps Lock suppression now included in public build — when using Caps Lock as PTT, it no longer toggles caps lock state while recording
+
 ## 0.84.8.2
 - Fixed crash on launch: gemini_api_key_var missing from assistant.py state dict
 
