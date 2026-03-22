@@ -1,0 +1,17 @@
+# ── Wizard-downloaded models (Vosk STT) ──
+# These are downloaded per-user by the setup wizard.
+# Including them in git breaks fresh installs.
+data/model/en/
+data/model/es/
+data/model/*.zip
+
+# ── User config (contains API keys, tokens, per-user settings) ──
+data/config.json
+
+# ── Logs & bug reports ──
+data/logs/
+
+# ── Python bytecode ──
+__pycache__/
+*.pyc
+*.pyo
