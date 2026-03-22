@@ -113,6 +113,11 @@ def run_wizard(
         def _run():
             try:
                 urllib.request.urlretrieve(url, zip_path)
+                import shutil
+                for item in os.listdir(extract_dir):
+                    item_path = os.path.join(extract_dir, item)
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
                 with zipfile.ZipFile(zip_path, "r") as zf:
                     zf.extractall(extract_dir)
                 messagebox.showinfo("Done", f"{lang.upper()} model downloaded.")
