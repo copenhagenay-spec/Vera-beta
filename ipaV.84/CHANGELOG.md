@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.84.9.0
+- Switched AI backend to Groq (free, no quota issues) — also auto-detects Claude and OpenAI API keys
+- Added standard English model option in wizard (vosk-model-en-us-0.22-lgraph, ~128MB, better accuracy)
+- Vosk model now cached in memory — no longer reloads on every keypress
+- Add alias voice command — say "add alias [name] for [app]" to create custom app shortcuts
+- PTT audio cues — beep on press signals when to start talking, beep on release confirms end
+- Improved hold-to-talk timing — reduced audio cutoff at start and end of speech
+- Mishear corrections expanded for "restart assistant"
+- Wizard: desktop shortcut creation option added
+- Removed unused VBS launcher
+
 ## 0.84.8.6
 - UI refactor — improved layout consistency, button styles, card sections, and section headers (thepyro-dev)
 - Added .gitignore to prevent user data and models from being committed

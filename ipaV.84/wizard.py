@@ -13,6 +13,49 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 
+def _create_shortcut():
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(base, "data", "assets", "ipa.ico")
+        script_path = os.path.join(base, "assistant.py")
+        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        start_menu = os.path.join(
+            os.environ.get("APPDATA", ""),
+            "Microsoft", "Windows", "Start Menu", "Programs",
+        )
+        shortcut_path = os.path.join(desktop, "IPA.lnk")
+        start_path = os.path.join(start_menu, "IPA.lnk")
+
+        # Remove stale entries to prevent "(2)" duplicates
+        for stale in [
+            os.path.join(start_menu, "IPA.lnk"),
+            os.path.join(start_menu, "IPA (2).lnk"),
+            os.path.join(desktop, "IPA (2).lnk"),
+        ]:
+            try:
+                os.remove(stale)
+            except FileNotFoundError:
+                pass
+
+        pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+        if not os.path.exists(pythonw):
+            pythonw = sys.executable
+
+        ps = (
+            f'$lnk="{shortcut_path}";'
+            f'$s=(New-Object -COM WScript.Shell).CreateShortcut($lnk);'
+            f'$s.TargetPath="{pythonw}";'
+            f'$s.Arguments=\'"{script_path}"\';'
+            f'$s.IconLocation="{icon_path}";'
+            f'$s.WorkingDirectory="{base}";'
+            f'$s.Save();'
+            f'Copy-Item $lnk "{start_path}" -Force'
+        )
+        subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", ps], check=True)
+    except Exception:
+        pass
+
+
 def run_wizard(
     root,
     state: dict,
@@ -40,6 +83,9 @@ def run_wizard(
 
     HOTKEY_CHOICES = constants["HOTKEY_CHOICES"]
     LANG_CHOICES = constants["LANG_CHOICES"]
+
+    import tkinter as tk
+    create_shortcut_var = tk.IntVar(value=1)
 
     mode = state["mode"]
     language = state["language"]
@@ -90,6 +136,8 @@ def run_wizard(
     def _finish():
         data = _build_config(wizard_done=True)
         _save_config(data)
+        if create_shortcut_var.get():
+            _create_shortcut()
         wizard.destroy()
         _start_background()
         messagebox.showinfo("Done", "Setup complete. IPA is ready.")
@@ -148,12 +196,17 @@ def run_wizard(
     btn_frame.pack(fill="x", padx=10, pady=(10, 4))
     ctk.CTkButton(
         btn_frame,
-        text="Download English Model",
+        text="English Model - Small (faster)",
         command=lambda: _download_model("en", model_urls["en"]),
     ).pack(side="left", padx=6, pady=8)
     ctk.CTkButton(
         btn_frame,
-        text="Download Spanish Model",
+        text="English Model - Standard (better accuracy)",
+        command=lambda: _download_model("en", model_urls["en_standard"]),
+    ).pack(side="left", padx=6, pady=8)
+    ctk.CTkButton(
+        btn_frame,
+        text="Spanish Model",
         command=lambda: _download_model("es", model_urls["es"]),
     ).pack(side="left", padx=6, pady=8)
 
@@ -164,6 +217,10 @@ def run_wizard(
     )
     ctk.CTkButton(btn_frame2, text="Install Dependencies", command=_install_deps_wizard).pack(
         side="left", padx=6, pady=8
+    )
+
+    ctk.CTkCheckBox(scroll, text="Create desktop shortcut", variable=create_shortcut_var).pack(
+        anchor="w", padx=16, pady=(10, 2)
     )
 
     ctk.CTkButton(

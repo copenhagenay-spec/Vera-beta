@@ -89,14 +89,28 @@ class BackgroundListener:
             if not button_obj:
                 raise ValueError("Invalid mouse button")
 
+            _mouse_released = {"done": False}
+
             def _on_click(x, y, button, pressed):
                 if button != button_obj:
                     return
                 if pressed and not self.recording_flag.is_set():
+                    _mouse_released["done"] = False
                     self.recording_flag.set()
-                    threading.Thread(target=_record, daemon=True).start()
-                elif not pressed and self.recording_flag.is_set():
-                    self.stop_event.set()
+                    def _start():
+                        threading.Thread(target=_record, daemon=True).start()
+                        time.sleep(0.5)
+                        try: __import__('winsound').Beep(660, 60)
+                        except Exception: pass
+                    threading.Thread(target=_start, daemon=True).start()
+                elif not pressed and self.recording_flag.is_set() and not _mouse_released["done"]:
+                    _mouse_released["done"] = True
+                    def _stop():
+                        try: __import__('winsound').Beep(440, 60)
+                        except Exception: pass
+                        time.sleep(0.65)
+                        self.stop_event.set()
+                    threading.Thread(target=_stop, daemon=True).start()
 
             self.stop()
             self.mode = "hold"
@@ -110,6 +124,7 @@ class BackgroundListener:
 
             # Caps Lock suppression — local only, never pushed to public build
             _caps_desired = {"state": None}
+            _kb_released = {"done": False}
 
             def _on_press(key):
                 if key == key_obj and not self.recording_flag.is_set():
@@ -120,12 +135,24 @@ class BackgroundListener:
                             _caps_desired["state"] = 0 if current else 1
                         except Exception:
                             pass
+                    _kb_released["done"] = False
                     self.recording_flag.set()
-                    threading.Thread(target=_record, daemon=True).start()
+                    def _start():
+                        threading.Thread(target=_record, daemon=True).start()
+                        time.sleep(0.5)
+                        try: __import__('winsound').Beep(660, 60)
+                        except Exception: pass
+                    threading.Thread(target=_start, daemon=True).start()
 
             def _on_release(key):
-                if key == key_obj and self.recording_flag.is_set():
-                    self.stop_event.set()
+                if key == key_obj and self.recording_flag.is_set() and not _kb_released["done"]:
+                    _kb_released["done"] = True
+                    def _stop():
+                        try: __import__('winsound').Beep(440, 60)
+                        except Exception: pass
+                        time.sleep(0.65)
+                        self.stop_event.set()
+                    threading.Thread(target=_stop, daemon=True).start()
                     if key == keyboard.Key.caps_lock and _caps_desired["state"] is not None:
                         desired = _caps_desired["state"]
                         def _restore():
@@ -945,6 +972,7 @@ def main() -> None:
     def _run_wizard():
         model_urls = {
             "en": "https://github.com/copenhagenay-spec/IPA-alpha/releases/download/dependency/vosk-model-small-en-us-0.15.zip",
+            "en_standard": "https://github.com/copenhagenay-spec/IPA-alpha/releases/download/dependency3/vosk-model-en-us-0.22-lgraph.zip",
             "es": "https://github.com/copenhagenay-spec/IPA-alpha/releases/download/dependency2/vosk-model-small-es-0.42.zip",
         }
         state = {

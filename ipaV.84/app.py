@@ -13,6 +13,9 @@ class MissingDependencyError(RuntimeError):
     pass
 
 
+_model_cache: dict = {}
+
+
 def _require_deps() -> Tuple[object, object]:
     try:
         import sounddevice as sd  # type: ignore
@@ -62,13 +65,16 @@ def transcribe_mic(
 
     sd, (Model, KaldiRecognizer) = _require_deps()
 
-    try:
-        model = Model(_resolve_model_path(model_path))
-    except Exception as exc:
-        raise MissingDependencyError(
-            "Missing model files. Download a Vosk model and place it at: "
-            f"{model_path}"
-        ) from exc
+    resolved = _resolve_model_path(model_path)
+    if resolved not in _model_cache:
+        try:
+            _model_cache[resolved] = Model(resolved)
+        except Exception as exc:
+            raise MissingDependencyError(
+                "Missing model files. Download a Vosk model and place it at: "
+                f"{model_path}"
+            ) from exc
+    model = _model_cache[resolved]
 
     q: Queue[bytes] = Queue()
 
@@ -82,7 +88,7 @@ def transcribe_mic(
 
     with sd.RawInputStream(
         samplerate=samplerate,
-        blocksize=8000,
+        blocksize=4000,
         dtype="int16",
         channels=1,
         callback=_callback,
@@ -117,13 +123,16 @@ def transcribe_mic_hold(
     """
     sd, (Model, KaldiRecognizer) = _require_deps()
 
-    try:
-        model = Model(_resolve_model_path(model_path))
-    except Exception as exc:
-        raise MissingDependencyError(
-            "Missing model files. Download a Vosk model and place it at: "
-            f"{model_path}"
-        ) from exc
+    resolved = _resolve_model_path(model_path)
+    if resolved not in _model_cache:
+        try:
+            _model_cache[resolved] = Model(resolved)
+        except Exception as exc:
+            raise MissingDependencyError(
+                "Missing model files. Download a Vosk model and place it at: "
+                f"{model_path}"
+            ) from exc
+    model = _model_cache[resolved]
 
     q: Queue[bytes] = Queue()
 
@@ -137,7 +146,7 @@ def transcribe_mic_hold(
 
     with sd.RawInputStream(
         samplerate=samplerate,
-        blocksize=8000,
+        blocksize=4000,
         dtype="int16",
         channels=1,
         callback=_callback,

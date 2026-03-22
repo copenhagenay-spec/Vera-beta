@@ -380,6 +380,14 @@ _MISHEAR_MAP = {
     "any may": "anime",
     "any me": "anime",
     "anymay": "anime",
+    # restart assistant variants
+    "we start assistant": "restart assistant",
+    "i start assistant": "restart assistant",
+    "start assistance": "restart assistant",
+    "we start sf": "restart assistant",
+    "restart as": "restart assistant",
+    "we start": "restart assistant",
+    "re start assistant": "restart assistant",
 }
 
 _FUZZY_TARGETS = {
@@ -448,6 +456,25 @@ def _has_keyword(text: str, keywords: list) -> bool:
 
 def _normalize_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _add_alias(alias: str, target: str) -> bool:
+    try:
+        from config import save_config
+        cfg = load_config()
+        aliases = cfg.get("app_aliases", {})
+        if not isinstance(aliases, dict):
+            aliases = {}
+        aliases[alias.lower()] = target.lower()
+        cfg["app_aliases"] = aliases
+        save_config(cfg)
+        _log_event(f"ALIAS_ADDED: {alias} -> {target}")
+        _tts_speak(f"Alias {alias} added for {target}.")
+        return True
+    except Exception as exc:
+        _log_event(f"ALIAS_ADD_FAILED: {exc}")
+        _tts_speak("Failed to add alias.")
+        return False
 
 
 def _open_app(app_name: str, allow_prompt: bool, confirm_fn=None) -> bool:
@@ -948,7 +975,7 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
         return True
 
     # Restart IPA
-    if re.search(r"\b(restart|reboot)\s+(ipa|assistant|the assistant)\b", t):
+    if re.search(r"\b(restart|reboot)\s+(ipa|assistant|the assistant)\b", t) or t.strip() in ("restart", "reboot"):
         _log_event("RESTART_IPA: voice command")
         if restart_fn is not None:
             threading.Thread(target=restart_fn, daemon=True).start()
@@ -1174,6 +1201,12 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
                 ok = _media_key(action)
                 if ok:
                     return True
+
+    # Add alias
+    alias_match = re.search(r"\badd alias\s+(.+?)\s+for\s+(.+)$", t)
+    if alias_match:
+        _add_alias(alias_match.group(1).strip(), alias_match.group(2).strip())
+        return True
 
     open_match = re.search(r"\b(open|launch|start)\s+(.+)$", t)
     if open_match:
