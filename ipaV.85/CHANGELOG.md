@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.84.8.7
+## 0.85.1
 - Personality system — moved all response pools into `personality.py` for cleaner separation
 - Wake acknowledgments — 15 random lines when wake word triggers
 - Command confirmations — per-category response pools (open, close, volume, note, timer, search, send)
