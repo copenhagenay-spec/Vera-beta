@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.85.2
+- Key binds: mouse side button support (x1/x2) fixed — was silently failing
+- Key binds: combo support fixed (alt+n, ctrl+shift+f etc.) — bracket parsing bug resolved
+- Key binds: macro sequences — chain multiple keypresses with > separator (e.g. x1 > q)
+- Key binds: remove specific bind by clicking to select then clicking Remove Selected
+- Vosk noise filter — "the", "a", "an" and other artifacts silently dropped instead of triggering fallback
+- Leading "the" stripped globally — "the open map" → "open map" before command matching
+- keybinds.md updated with full usage guide and anti-cheat warning
+
 ## 0.85.1
 - Personality system — moved all response pools into `personality.py` for cleaner separation
 - Wake acknowledgments — 15 random lines when wake word triggers

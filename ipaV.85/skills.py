@@ -916,30 +916,86 @@ def _show_help() -> None:
         print(f"Help display failed: {exc}")
 
 
+def _resolve_key(raw: str):
+    """Resolve a single key string to a pynput key object or mouse button."""
+    raw = raw.strip().lower()
+    if raw.startswith("<") and raw.endswith(">"):
+        raw = raw[1:-1].strip()
+    if raw in ("x1", "x2"):
+        from pynput import mouse as _mouse  # type: ignore
+        return ("mouse", _mouse.Button.x1 if raw == "x1" else _mouse.Button.x2)
+    from pynput import keyboard  # type: ignore
+    if len(raw) == 1:
+        return ("key", keyboard.KeyCode.from_char(raw))
+    obj = getattr(keyboard.Key, raw, None)
+    if obj is None:
+        return None
+    return ("key", obj)
+
+
+_MODIFIER_NAMES = {"ctrl", "alt", "shift", "cmd"}
+
+
 def _press_key(key: str, count: int = 1) -> bool:
+    """Press a single key or combo (e.g. 'alt+n', 'ctrl+shift+f', 'x1')."""
     try:
-        from pynput import keyboard  # type: ignore
-        ctl = keyboard.Controller()
-        raw = str(key).strip().lower()
-        if raw.startswith("<") and raw.endswith(">"):
-            raw = raw[1:-1].strip()
-        if len(raw) == 1:
-            key_obj = keyboard.KeyCode.from_char(raw)
-        else:
-            key_obj = getattr(keyboard.Key, raw, None)
-            if key_obj is None:
-                _log_event(f"PRESS_KEY_FAILED: unknown key: {key}")
-                return False
+        from pynput import keyboard as _kb  # type: ignore
+        from pynput import mouse as _mouse  # type: ignore
+
+        parts = [p.strip().lower() for p in key.split("+")]
+        modifiers = []
+        main = None
+
+        for part in parts:
+            clean = part.strip("<>")
+            if clean in _MODIFIER_NAMES:
+                mod = getattr(_kb.Key, clean, None)
+                if mod:
+                    modifiers.append(mod)
+            else:
+                main = part
+
+        if main is None:
+            return False
+
+        resolved = _resolve_key(main)
+        if resolved is None:
+            _log_event(f"PRESS_KEY_FAILED: unknown key: {main}")
+            return False
+
+        kb_ctl = _kb.Controller()
+        ms_ctl = _mouse.Controller()
+
         for i in range(max(1, count)):
-            ctl.press(key_obj)
-            ctl.release(key_obj)
+            for mod in modifiers:
+                kb_ctl.press(mod)
+            if resolved[0] == "mouse":
+                ms_ctl.press(resolved[1])
+                ms_ctl.release(resolved[1])
+            else:
+                kb_ctl.press(resolved[1])
+                kb_ctl.release(resolved[1])
+            for mod in reversed(modifiers):
+                kb_ctl.release(mod)
             if count > 1 and i < count - 1:
                 time.sleep(0.1)
+
         _log_event(f"PRESS_KEY: {key} x{count}")
         return True
     except Exception as exc:
         _log_event(f"PRESS_KEY_FAILED: {exc}")
         return False
+
+
+def _run_macro(sequence: str, count: int = 1) -> bool:
+    """Run a macro sequence of key steps separated by '>'. e.g. 'x1 > q' or 'alt+n'."""
+    steps = [s.strip() for s in sequence.split(">") if s.strip()]
+    for _ in range(max(1, count)):
+        for step in steps:
+            _press_key(step, 1)
+            time.sleep(0.15)
+    _log_event(f"MACRO_RUN: {sequence} x{count}")
+    return True
 
 
 def _send_message(text: str) -> bool:
@@ -1229,6 +1285,15 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
     if not t:
         return False
 
+    # Filter Vosk noise artifacts — short meaningless outputs that aren't real commands
+    _NOISE_WORDS = {"the", "a", "an", "and", "of", "to", "in", "is", "it", "i"}
+    if t in _NOISE_WORDS:
+        return False
+
+    # Strip leading "the" Vosk artifact (e.g. "the new villager" → "new villager")
+    if t.startswith("the "):
+        t = t[4:]
+
     # Help
     if re.search(r"\b(what can i say|show commands|show help|list commands)\b", t):
         threading.Thread(target=_show_help, daemon=True).start()
@@ -1253,7 +1318,7 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
             if not phrase or not key:
                 continue
             if _normalize_text(phrase) == norm_t:
-                _press_key(key, count)
+                _run_macro(key, count)
                 return True
 
     # Send message (type + Enter)

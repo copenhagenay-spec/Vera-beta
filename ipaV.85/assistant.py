@@ -883,13 +883,112 @@ def main() -> None:
     def _refresh_keybinds():
         if keybinds_textbox is None:
             return
-        keybinds_textbox.configure(state="normal")
-        keybinds_textbox.delete("1.0", "end")
+        keybinds_textbox.delete(0, "end")
         for kb in keybinds:
             count = kb.get("count", 1)
             suffix = f" x{count}" if int(count) > 1 else ""
-            keybinds_textbox.insert("end", f"{kb.get('phrase')}  ->  {kb.get('key')}{suffix}\n")
-        keybinds_textbox.configure(state="disabled")
+            keybinds_textbox.insert("end", f"{kb.get('phrase')}  ->  {kb.get('key')}{suffix}")
+
+    def _record_keybind_step(target_var: tk.StringVar) -> None:
+        """Record a single key/combo and append it as a macro step."""
+        try:
+            from pynput import keyboard as _kb  # type: ignore
+            from pynput import mouse as _ms  # type: ignore
+        except Exception:
+            messagebox.showerror("Missing Dependency", "pynput is required to record keys.")
+            return
+
+        dialog = tk.Toplevel(root)
+        dialog.title("Record Key Step")
+        dialog.geometry("360x130")
+        dialog.resizable(False, False)
+        dialog.transient(root)
+        dialog.grab_set()
+
+        tk.Label(dialog, text="Press a key, combo (hold mods first), or side mouse button").pack(padx=10, pady=(12, 6))
+        status = tk.StringVar(value="Waiting...")
+        tk.Label(dialog, textvariable=status).pack(padx=10, pady=(0, 10))
+
+        modifier_keys = {_kb.Key.ctrl, _kb.Key.ctrl_l, _kb.Key.ctrl_r,
+                         _kb.Key.alt, _kb.Key.alt_l, _kb.Key.alt_r,
+                         _kb.Key.shift, _kb.Key.shift_l, _kb.Key.shift_r,
+                         _kb.Key.cmd, _kb.Key.cmd_l, _kb.Key.cmd_r}
+        pressed_mods: list = []
+        active = {"kb": None, "ms": None, "done": False}
+
+        def _mod_name(k):
+            n = getattr(k, "name", "").lower()
+            for m in ("ctrl", "alt", "shift", "cmd"):
+                if m in n:
+                    return m
+            return None
+
+        def _finish(value, display=None):
+            if active["done"]:
+                return
+            active["done"] = True
+            if value:
+                current = target_var.get().strip()
+                if current:
+                    target_var.set(current + " > " + value)
+                else:
+                    target_var.set(value)
+                status.set(f"Added: {display or value}")
+            else:
+                status.set("Canceled")
+            try:
+                if active["kb"]: active["kb"].stop()
+                if active["ms"]: active["ms"].stop()
+            except Exception:
+                pass
+            dialog.after(400, dialog.destroy)
+
+        def _on_press(key):
+            if key == _kb.Key.esc:
+                _finish(None)
+                return False
+            mn = _mod_name(key)
+            if mn and mn not in pressed_mods:
+                pressed_mods.append(mn)
+                return
+
+        def _on_release(key):
+            mn = _mod_name(key)
+            if mn:
+                if mn in pressed_mods:
+                    pressed_mods.remove(mn)
+                return
+            name = None
+            if isinstance(key, _kb.KeyCode) and key.char:
+                name = key.char.lower()
+            elif key == _kb.Key.space:
+                name = "space"
+            else:
+                name = getattr(key, "name", None)
+                if name:
+                    name = name.lower()
+            if not name:
+                _finish(None)
+                return False
+            parts = pressed_mods + [name]
+            combo = "+".join(parts)
+            _finish(combo, combo)
+            return False
+
+        def _on_click(x, y, button, pressed):
+            if not pressed:
+                return
+            if button == _ms.Button.x1:
+                _finish("x1", "Mouse Back (x1)")
+                return False
+            elif button == _ms.Button.x2:
+                _finish("x2", "Mouse Fwd (x2)")
+                return False
+
+        active["kb"] = _kb.Listener(on_press=_on_press, on_release=_on_release)
+        active["kb"].start()
+        active["ms"] = _ms.Listener(on_click=_on_click)
+        active["ms"].start()
 
     def _add_keybind():
         phrase = keybind_phrase_var.get().strip().lower()
@@ -908,9 +1007,12 @@ def main() -> None:
         _refresh_keybinds()
 
     def _remove_keybind():
-        if not keybinds:
+        if not keybinds or keybinds_textbox is None:
             return
-        keybinds.pop(-1)
+        selection = keybinds_textbox.curselection()
+        idx = selection[0] if selection else len(keybinds) - 1
+        if 0 <= idx < len(keybinds):
+            keybinds.pop(idx)
         _refresh_keybinds()
 
     def _import_steam():
@@ -1371,7 +1473,7 @@ def main() -> None:
         "remove_discord_channel": _remove_discord_channel,
         "add_keybind": _add_keybind,
         "remove_keybind": _remove_keybind,
-        "record_keybind_key": _record_hold_key,
+        "record_keybind_key": _record_keybind_step,
     }
 
     constants = {

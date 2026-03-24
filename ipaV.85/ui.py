@@ -520,8 +520,10 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
         wraplength=520,
     ).pack(anchor="w", padx=PAD_OUTER, pady=(0, 6))
 
-    keybinds_textbox = ctk.CTkTextbox(integ_scroll, height=100,
-                                       corner_radius=8)
+    import tkinter as _tk_kb
+    keybinds_textbox = _tk_kb.Listbox(integ_scroll, height=6, selectmode="single",
+                                       bg="#2b2b2b", fg="white", selectbackground="#1f538d",
+                                       relief="flat", highlightthickness=0, font=("Segoe UI", 12))
     keybinds_textbox.pack(fill="x", padx=PAD_OUTER, pady=4)
 
     kb_input_card = _card(integ_scroll)
@@ -534,10 +536,10 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
 
     kb_r2 = _card_row(kb_input_card)
     ctk.CTkLabel(kb_r2, text="Key", width=100).pack(side="left")
-    ctk.CTkEntry(kb_r2, textvariable=keybind_key_var, width=120,
-                 placeholder_text="e.g. r").pack(side="left", padx=(0, 10))
+    ctk.CTkEntry(kb_r2, textvariable=keybind_key_var, width=180,
+                 placeholder_text="e.g. alt+n or x1 > q").pack(side="left", padx=(0, 10))
     _secondary_btn(
-        kb_r2, text="Record",
+        kb_r2, text="+ Step",
         command=lambda: _record_keybind_key(keybind_key_var),
         width=90
     ).pack(side="left")
@@ -552,7 +554,7 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
     kb_btns = _btn_row(integ_scroll)
     _primary_btn(kb_btns, text="Add Key Bind", command=_add_keybind,
                  width=130).pack(side="left", padx=4)
-    _danger_btn(kb_btns, text="Remove Last", command=_remove_keybind,
+    _danger_btn(kb_btns, text="Remove Selected", command=_remove_keybind,
                 width=130).pack(side="right", padx=4)
 
     # =====================================================================
