@@ -243,7 +243,7 @@ def main() -> None:
     def _startup_update_check():
         try:
             local = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip()
-            url = "https://raw.githubusercontent.com/copenhagenay-spec/IPA-alpha/main/vera/VERSION"
+            url = "https://raw.githubusercontent.com/copenhagenay-spec/Vera-beta/main/vera/VERSION"
             with urllib.request.urlopen(url, timeout=8) as r:
                 remote = r.read().decode().strip()
             if remote != local:
@@ -443,7 +443,7 @@ def main() -> None:
         return tuple(parts)
 
     def _fetch_latest_version() -> str | None:
-        url = "https://raw.githubusercontent.com/copenhagenay-spec/IPA-alpha/main/vera/VERSION"
+        url = "https://raw.githubusercontent.com/copenhagenay-spec/Vera-beta/main/vera/VERSION"
         with urllib.request.urlopen(url, timeout=10) as resp:
             return resp.read().decode("utf-8").strip()
 
@@ -527,7 +527,7 @@ def main() -> None:
             backup_dir = os.path.join(data_dir, f"backup_{time.strftime('%Y%m%d_%H%M%S')}")
             _backup_current_app(backup_dir)
 
-            zip_url = "https://github.com/copenhagenay-spec/IPA-alpha/archive/refs/heads/main.zip"
+            zip_url = "https://github.com/copenhagenay-spec/Vera-beta/archive/refs/heads/main.zip"
             zip_path = os.path.join(data_dir, "update.zip")
             urllib.request.urlretrieve(zip_url, zip_path)
             _apply_update_from_zip(zip_path)
