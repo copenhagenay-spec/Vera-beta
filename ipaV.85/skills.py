@@ -1309,6 +1309,121 @@ def _discord_send(channel_name: str, message: str) -> bool:
         return False
 
 
+def _discord_delete_last(channel_name: str) -> bool:
+    cfg = load_config()
+    token = cfg.get("discord_bot_token", "").strip()
+    guild_id = cfg.get("discord_server_id", "").strip()
+    if not token or not guild_id:
+        _tts_speak("Discord bot token or server ID not configured.")
+        return False
+    try:
+        import json, urllib.request, urllib.error
+        headers = {"Authorization": f"Bot {token}", "User-Agent": "VERA/1.0"}
+
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            channels = json.loads(resp.read().decode("utf-8"))
+        channel_id = next(
+            (ch["id"] for ch in channels
+             if ch.get("type") == 0 and ch.get("name", "").lower() == channel_name.lower()),
+            None)
+        if not channel_id:
+            _tts_speak(f"Channel {channel_name} not found.")
+            return False
+
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/channels/{channel_id}/messages?limit=1",
+            headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            messages = json.loads(resp.read().decode("utf-8"))
+        if not messages:
+            _tts_speak(f"No messages to delete in {channel_name}.")
+            return True
+
+        msg_id = messages[0]["id"]
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/channels/{channel_id}/messages/{msg_id}",
+            headers=headers, method="DELETE")
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        _tts_speak(f"Last message in {channel_name} deleted.")
+        _log_event(f"DISCORD_DELETE: #{channel_name} msg {msg_id}")
+        return True
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8") if hasattr(exc, "read") else ""
+        _log_event(f"DISCORD_DELETE_FAILED: {exc} — {body}")
+        _tts_speak("Failed to delete message. Check bot permissions.")
+        return False
+    except Exception as exc:
+        _log_event(f"DISCORD_DELETE_FAILED: {exc}")
+        return False
+
+
+def _discord_purge(channel_name: str, count: int) -> bool:
+    cfg = load_config()
+    token = cfg.get("discord_bot_token", "").strip()
+    guild_id = cfg.get("discord_server_id", "").strip()
+    if not token or not guild_id:
+        _tts_speak("Discord bot token or server ID not configured.")
+        return False
+    count = max(1, min(count, 100))
+    try:
+        import json, urllib.request, urllib.error
+        headers = {
+            "Authorization": f"Bot {token}",
+            "User-Agent": "VERA/1.0",
+            "Content-Type": "application/json",
+        }
+
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            channels = json.loads(resp.read().decode("utf-8"))
+        channel_id = next(
+            (ch["id"] for ch in channels
+             if ch.get("type") == 0 and ch.get("name", "").lower() == channel_name.lower()),
+            None)
+        if not channel_id:
+            _tts_speak(f"Channel {channel_name} not found.")
+            return False
+
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/channels/{channel_id}/messages?limit={count}",
+            headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            messages = json.loads(resp.read().decode("utf-8"))
+        if not messages:
+            _tts_speak(f"No messages to delete in {channel_name}.")
+            return True
+
+        msg_ids = [m["id"] for m in messages]
+        if len(msg_ids) == 1:
+            req = urllib.request.Request(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/{msg_ids[0]}",
+                headers=headers, method="DELETE")
+            with urllib.request.urlopen(req, timeout=10):
+                pass
+        else:
+            data = json.dumps({"messages": msg_ids}).encode("utf-8")
+            req = urllib.request.Request(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/bulk-delete",
+                data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=10):
+                pass
+        _tts_speak(f"Deleted {len(msg_ids)} messages from {channel_name}.")
+        _log_event(f"DISCORD_PURGE: #{channel_name} x{len(msg_ids)}")
+        return True
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8") if hasattr(exc, "read") else ""
+        _log_event(f"DISCORD_PURGE_FAILED: {exc} — {body}")
+        _tts_speak("Failed to purge messages. Check bot permissions.")
+        return False
+    except Exception as exc:
+        _log_event(f"DISCORD_PURGE_FAILED: {exc}")
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Intent Router
 # ---------------------------------------------------------------------------
@@ -1465,6 +1580,20 @@ def _ih_read_out(m, t, allow_prompt, confirm_fn, restart_fn):
 @_intent(810, r"\bread\s+discord\s+(\w+)\b")
 def _ih_discord_read(m, t, allow_prompt, confirm_fn, restart_fn):
     threading.Thread(target=_discord_read, args=(m.group(1).strip(),), daemon=True).start()
+    return True
+
+
+# --- Discord delete last ---
+@_intent(808, r"\bdiscord\s+delete\s+(\w+)\b")
+def _ih_discord_delete(m, t, allow_prompt, confirm_fn, restart_fn):
+    threading.Thread(target=_discord_delete_last, args=(m.group(1).strip(),), daemon=True).start()
+    return True
+
+
+# --- Discord purge ---
+@_intent(806, r"\bdiscord\s+purge\s+(\w+)\s+(\d+)\b")
+def _ih_discord_purge(m, t, allow_prompt, confirm_fn, restart_fn):
+    threading.Thread(target=_discord_purge, args=(m.group(1).strip(), int(m.group(2))), daemon=True).start()
     return True
 
 
