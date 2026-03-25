@@ -745,10 +745,26 @@ def main() -> None:
         logo_path = os.path.join(os.path.dirname(__file__), "data", "assets", "ipa_logo.png")
         try:
             from PIL import Image  # type: ignore
-            pil_img = Image.open(logo_path)
-            w, h = pil_img.size
-            new_w, new_h = w // 6, h // 6
-            img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(new_w, new_h))
+
+            # Dark bg = gray17 ≈ #2b2b2b, Light bg = gray86 ≈ #dbdbdb
+            def _composite(src: Image.Image, bg_hex: str) -> Image.Image:
+                r = int(bg_hex[1:3], 16)
+                g = int(bg_hex[3:5], 16)
+                b = int(bg_hex[5:7], 16)
+                bg = Image.new("RGBA", src.size, (r, g, b, 255))
+                bg.paste(src, mask=src.split()[3])
+                return bg.convert("RGB")
+
+            target_h = 180
+            pil_src = Image.open(logo_path).convert("RGBA")
+            w, h = pil_src.size
+            target_w = int(w * target_h / h)
+            pil_src = pil_src.resize((target_w, target_h), Image.LANCZOS)
+
+            dark_img  = _composite(pil_src, "#2b2b2b")
+            light_img = _composite(pil_src, "#dbdbdb")
+
+            img = ctk.CTkImage(light_image=light_img, dark_image=dark_img, size=(target_w, target_h))
             return img
         except Exception:
             return None
@@ -1422,7 +1438,7 @@ def main() -> None:
                 f'$s = $ws.CreateShortcut("{dest}"); '
                 f'$s.TargetPath = "{target}"; '
                 f'$s.WorkingDirectory = "{base_dir}"; '
-                f'$s.IconLocation = "{icon}"; '
+                f'$s.IconLocation = "{target}, 0"; '
                 f'$s.Save()'
             )
             return subprocess.run(["powershell", "-Command", ps], capture_output=True).returncode == 0

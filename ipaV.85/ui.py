@@ -196,7 +196,8 @@ def build_ui(root, state: dict, callbacks: dict, constants: dict):
     logo_img = _load_logo()
     if logo_img is not None:
         logo_label = ctk.CTkLabel(home_scroll, image=logo_img, text="", bg_color="transparent")
-        logo_label.pack(pady=(10, 6))
+        logo_label.pack(pady=(10, 2))
+        ctk.CTkLabel(home_scroll, text="VERA", font=("Segoe UI", 22, "bold"), bg_color="transparent").pack(pady=(0, 6))
 
     # -- Primary Controls (swap based on mode) --
     _section_header(home_scroll, "Controls")
