@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.86.3
+- Fixed desktop and Start Menu shortcuts not launching VERA
+- Media keys (play, pause, skip, previous) now work with any player — Apple Music, YouTube, etc. — not just Spotify
+
 ## 0.86.2
 - Fixed VERA.exe not launching after fresh install — launcher was spawning itself recursively instead of finding the real Python interpreter
 
