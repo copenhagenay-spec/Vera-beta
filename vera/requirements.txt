@@ -9,3 +9,4 @@ pyttsx3
 pycaw
 kokoro-onnx
 soundfile
+requests

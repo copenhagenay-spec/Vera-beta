@@ -1,24 +1,10 @@
 # Changelog
 
-## 0.88.0
-- Multi-server Discord support — add servers with nicknames in the new Discord tab; use 'discord <server> <channel> <message>' to target specific servers
-- Discord tab — dedicated tab for all Discord config (servers, channels, bot token); moved out of Integrations
-- Toggle-to-talk mode — press once to start recording, press again to stop; replaces timed mic mode
-- Docs updated — Discord setup guide rewritten with multi-server walkthrough, VB-Cable routing, and all command formats
-
-## 0.87.1
-- Voice Output device — select a virtual audio device (e.g. VB-Cable) in Settings; "read out" routes TTS through it so it plays through Discord as your mic
-- Fixed restart showing "already running" — mutex now released before spawning new process on all restart paths (voice command, tray icon, updater)
-
-## 0.87.0
-- Mishear Training UI — new Training tab shows transcripts VERA didn't understand; click one, type what you meant, save; corrections apply immediately without restart
-- PTT beep volume — slider in Settings (0–100%) controls how loud the push-to-talk beeps are
-- Single instance enforcement — opening VERA a second time shows a warning and exits instead of opening a duplicate window
-
-## 0.86.4
-- Media keys work with any player (Apple Music, Spotify, etc.) — no longer requires Spotify checkbox
-- Auto-updater now also downloads VERA.exe so updates work without manual steps
-- Desktop shortcut fixed — was using admin-only path, now creates correctly for current user
+## 0.89.0
+- Bug report now submits to Discord automatically — creates a private ticket with description, VERA version, and full log zip attached
+- Description and Discord username prompts added to bug report flow
+- Ticket thread named after user's Discord handle if provided
+- `requests` added to dependencies
 
 ## 0.85.2
 - Key binds: mouse side button support (x1/x2) fixed — was silently failing

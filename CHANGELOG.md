@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.89.0
+- Bug report now submits to Discord automatically — creates a private ticket with description, VERA version, and full log zip attached
+- Description and Discord username prompts added to bug report flow
+- Ticket thread named after user's Discord handle if provided
+- `requests` added to dependencies
+
 ## 0.88.0
 - Multi-server Discord support — add servers with nicknames; use 'discord <server> <channel> <message>' to target specific servers
 - Discord tab — dedicated tab for all Discord config; moved out of Integrations

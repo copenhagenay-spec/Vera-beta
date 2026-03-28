@@ -371,6 +371,7 @@ def main() -> None:
     _all_devices = _sd.query_devices()
     tts_device_choices = ["Default"] + [d["name"] for d in _all_devices if d["max_output_channels"] > 0]
     tts_output_device = tk.StringVar(value=cfg.get("tts_output_device", "") or "Default")
+    bug_report_secret_var = tk.StringVar(value=cfg.get("bug_report_secret", ""))
     confirm_actions = tk.BooleanVar(value=bool(cfg.get("confirm_actions", False)))
     spotify_media = tk.BooleanVar(value=bool(cfg.get("spotify_media", False)))
     spotify_requires = tk.BooleanVar(value=bool(cfg.get("spotify_requires_keyword", False)))
@@ -508,6 +509,7 @@ def main() -> None:
             "discord_server_id": discord_server_id_var.get().strip(),
             "gemini_api_key": gemini_api_key_var.get().strip(),
             "keybinds": [k for k in keybinds if k.get("phrase") and k.get("key")],
+            "bug_report_secret": bug_report_secret_var.get(),
         }
         if wizard_done is not None:
             data["wizard_done"] = bool(wizard_done)
@@ -1486,6 +1488,26 @@ def main() -> None:
         threading.Thread(target=_run, daemon=True).start()
 
     def _create_bug_report():
+        # ── Description dialog ────────────────────────────────────────────────
+        desc_dialog = ctk.CTkInputDialog(
+            text="Describe the bug (what went wrong?):",
+            title="Bug Report"
+        )
+        description = desc_dialog.get_input()
+        if description is None:
+            return
+        description = description.strip()
+        if not description:
+            messagebox.showwarning("Bug Report", "Description is required.")
+            return
+
+        user_dialog = ctk.CTkInputDialog(
+            text="Your Discord username (optional — press Enter to skip):",
+            title="Bug Report"
+        )
+        discord_username = (user_dialog.get_input() or "").strip()
+
+        # ── Zip logs ──────────────────────────────────────────────────────────
         base_dir = os.path.dirname(__file__)
         data_dir = os.path.join(base_dir, "data")
         logs_dir = os.path.join(data_dir, "logs")
@@ -1520,11 +1542,45 @@ def main() -> None:
             messagebox.showerror("Bug Report Error", str(exc))
             return
 
-        messagebox.showinfo("Bug Report", f"Created:\n{zip_path}")
-        try:
-            os.startfile(logs_dir)
-        except Exception:
-            pass
+        # ── Submit to Discord bot ─────────────────────────────────────────────
+        _BUG_REPORT_URL    = "http://5.175.181.139:8080/report"
+        _BUG_REPORT_SECRET = bug_report_secret_var.get()
+
+        ticket_url = None
+        if _BUG_REPORT_SECRET:
+            try:
+                import requests as _req
+                version_path = os.path.join(base_dir, "VERSION")
+                version = open(version_path).read().strip() if os.path.exists(version_path) else "unknown"
+                with open(zip_path, "rb") as zf:
+                    r = _req.post(
+                        _BUG_REPORT_URL,
+                        data={
+                            "version": version,
+                            "description": description,
+                            "discord_username": discord_username,
+                        },
+                        files={"log_zip": (os.path.basename(zip_path), zf, "application/zip")},
+                        headers={"X-VERA-Token": _BUG_REPORT_SECRET},
+                        timeout=15,
+                    )
+                if r.ok:
+                    ticket_url = r.json().get("thread_url")
+            except Exception:
+                pass
+
+        if ticket_url:
+            messagebox.showinfo(
+                "Bug Report Submitted",
+                f"Ticket created! You can follow up here:\n{ticket_url}\n\nLog saved locally:\n{zip_path}"
+            )
+        else:
+            messagebox.showinfo("Bug Report", f"Saved locally:\n{zip_path}")
+            try:
+                os.startfile(logs_dir)
+            except Exception:
+                pass
+
         if messagebox.askyesno("Bug Report", "Would you like to clear the current logs to save space?"):
             try:
                 for log_file in (log_path, transcripts_path):
