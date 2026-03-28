@@ -109,3 +109,5 @@ If you prefer to run from source instead of using the installer:
 ## Legal
 
 By using VERA you agree to the [Terms of Service](vera/docs/terms.md).
+
+VERA uses open source libraries. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full details and LGPL compliance information.
