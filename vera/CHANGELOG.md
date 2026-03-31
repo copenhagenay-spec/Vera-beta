@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.95.1
+- Fixed crash on startup — `input_wrapper` and `tray_wrapper` dev-only modules replaced with `pynput` and `pystray` in public build
+
 ## 0.95
 - Premium tier foundation — `license.py` gate controls access to premium features; `premium` flag persists through config saves
 - Offensive personality mode (Premium) — alternate response pools across all response types: confirmations, wake acks, fallbacks, failures, and social interactions; unlocked via premium license

@@ -477,7 +477,7 @@ def _parse_timer(text: str):
 
 def _media_key(action: str) -> bool:
     try:
-        from input_wrapper import keyboard  # type: ignore
+        from pynput import keyboard  # type: ignore
     except Exception:
         print("Missing dependency: pynput (needed for media keys).")
         return False
@@ -1193,9 +1193,9 @@ def _resolve_key(raw: str):
     if raw.startswith("<") and raw.endswith(">"):
         raw = raw[1:-1].strip()
     if raw in ("x1", "x2"):
-        from input_wrapper import mouse as _mouse  # type: ignore
+        from pynput import mouse as _mouse  # type: ignore
         return ("mouse", _mouse.Button.x1 if raw == "x1" else _mouse.Button.x2)
-    from input_wrapper import keyboard  # type: ignore
+    from pynput import keyboard  # type: ignore
     if len(raw) == 1:
         return ("key", keyboard.KeyCode.from_char(raw))
     obj = getattr(keyboard.Key, raw, None)
@@ -1210,8 +1210,8 @@ _MODIFIER_NAMES = {"ctrl", "alt", "shift", "cmd"}
 def _press_key(key: str, count: int = 1) -> bool:
     """Press a single key or combo (e.g. 'alt+n', 'ctrl+shift+f', 'x1')."""
     try:
-        from input_wrapper import keyboard as _kb  # type: ignore
-        from input_wrapper import mouse as _mouse  # type: ignore
+        from pynput import keyboard as _kb  # type: ignore
+        from pynput import mouse as _mouse  # type: ignore
 
         parts = [p.strip().lower() for p in key.split("+")]
         modifiers = []
@@ -1271,7 +1271,7 @@ def _run_macro(sequence: str, count: int = 1) -> bool:
 
 def _send_message(text: str) -> bool:
     try:
-        from input_wrapper import KbController as Controller, Key  # type: ignore
+        from pynput.keyboard import Controller, Key  # type: ignore
         time.sleep(0.3)
         ctl = Controller()
         ctl.type(text)
@@ -1287,7 +1287,7 @@ def _send_message(text: str) -> bool:
 
 def _type_text(text: str) -> bool:
     try:
-        from input_wrapper import KbController as Controller  # type: ignore
+        from pynput.keyboard import Controller  # type: ignore
         time.sleep(0.3)
         Controller().type(text)
         _log_event(f"TYPE_TEXT: {text}")
@@ -2308,7 +2308,7 @@ def _ih_clipboard_clear(m, t, allow_prompt, confirm_fn, restart_fn):
 @_intent(250, r"\b(paste\s+clipboard|paste\s+that|paste\s+it)\b")
 def _ih_clipboard_paste(m, t, allow_prompt, confirm_fn, restart_fn):
     try:
-        from input_wrapper import KbController as _KbCtrl, Key as _Key
+        from pynput.keyboard import Controller as _KbCtrl, Key as _Key
         _kb = _KbCtrl()
         _kb.press(_Key.ctrl)
         _kb.press('v')

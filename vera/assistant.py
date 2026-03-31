@@ -90,7 +90,7 @@ class BackgroundListener:
         ).start()
 
     def start_toggle(self, toggle_key: str, model_path: str, confirm_fn, on_text=None, restart_fn=None, on_record_start=None, on_record_end=None):
-        from input_wrapper import keyboard  # type: ignore
+        from pynput import keyboard  # type: ignore
 
         def _record():
             if on_record_start:
@@ -126,7 +126,7 @@ class BackgroundListener:
         self.listener.start()
 
     def start_hold(self, hold_key: str, model_path: str, confirm_fn, on_text=None, restart_fn=None, on_record_start=None, on_record_end=None):
-        from input_wrapper import keyboard  # type: ignore
+        from pynput import keyboard  # type: ignore
 
         def _record():
             if on_record_start:
@@ -140,7 +140,7 @@ class BackgroundListener:
             self.stop_event.clear()
 
         if _is_mouse_button(hold_key):
-            from input_wrapper import mouse  # type: ignore
+            from pynput import mouse  # type: ignore
             button_obj = _resolve_mouse_button(hold_key, mouse)
             if not button_obj:
                 raise ValueError("Invalid mouse button")
@@ -831,7 +831,7 @@ def main() -> None:
 
     def _record_hotkey(target_var: tk.StringVar) -> None:
         try:
-            from input_wrapper import keyboard  # type: ignore
+            from pynput import keyboard  # type: ignore
         except Exception:
             _notify_error("Missing Dependency", "pynput is required to record hotkeys.")
             return
@@ -934,8 +934,8 @@ def main() -> None:
 
     def _record_hold_key(target_var: tk.StringVar) -> None:
         try:
-            from input_wrapper import keyboard  # type: ignore
-            from input_wrapper import mouse as pynput_mouse  # type: ignore
+            from pynput import keyboard  # type: ignore
+            from pynput import mouse as pynput_mouse  # type: ignore
         except Exception:
             _notify_error("Missing Dependency", "pynput is required to record keys.")
             return
@@ -1489,8 +1489,8 @@ def main() -> None:
     def _record_keybind_step(target_var: tk.StringVar) -> None:
         """Record a single key/combo and append it as a macro step."""
         try:
-            from input_wrapper import keyboard as _kb  # type: ignore
-            from input_wrapper import mouse as _ms  # type: ignore
+            from pynput import keyboard as _kb  # type: ignore
+            from pynput import mouse as _ms  # type: ignore
         except Exception:
             _notify_error("Missing Dependency", "pynput is required to record keys.")
             return
@@ -1852,7 +1852,7 @@ def main() -> None:
     # --- System Tray ---
     def _create_tray_icon():
         try:
-            from tray_wrapper import pystray  # type: ignore
+            import pystray  # type: ignore
             from PIL import Image, ImageDraw  # type: ignore
         except Exception:
             return None
