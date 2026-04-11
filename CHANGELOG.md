@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.97.5
+- Jarvis personality mode — formal, composed, dry British wit; free tier alongside Professional
+- Game overlay — transparent always-on-top bar showing last 3 You/VERA exchanges; say "show overlay" / "hide overlay" or set a hotkey; position configurable in Settings (Top Left default)
+- Gaming mode — say "start gaming mode" to strip responses to ultra-short, silence idle chatter, and suppress unrecognized command feedback; status bar shows "Gaming Mode" while active; say "stop gaming mode" to exit
+
+## 0.97.4
+- Fixed: note command ignored when transcript starts with "notes." followed by a remember-pattern word
+- Added: date command — "what's the date" / "what day is it" returns current date without requiring Groq
+- Added: install path display in Settings Utilities — shows VERA's install folder with Open and Copy buttons
+- Fixed: voice restart command leaving old instance alive with a dead listener
+- Help command updated — Reminders, mute/unmute, and date added
+
+## 0.97.3
+- Added: mouse side button support — extra mouse buttons (x1/x2) can now be recorded as hold-to-talk or toggle keys
+- Fixed: Record button for toggle key and hold key not updating the text field after recording
+
+## 0.97.2
+- Fixed: keybind "+ Step" key field not updating after recording a key
+- Fixed: modifier key combos (alt+n, ctrl+shift+f, etc.) not captured
+- Fixed: hold-to-talk occasionally freezing
+- Fixed: tray icon not recovering after Windows Explorer restart
+
+## 0.97.1
+- Fixed: VERA not launching on Python 3.11/3.12/3.13 installs
+- Fixed: `run_ipa.cmd` hardcoded to Python 3.14 only
+
 ## 0.97.0
 - UI rebuilt on PySide6/Qt6 — eliminates scroll tearing, uses native OS rendering
 - Silent installer — pip, espeak-ng, and Kokoro model files all download and install automatically with progress shown in the installer UI (no terminal window)

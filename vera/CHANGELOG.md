@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.97.5
+- Jarvis personality mode — formal, composed, dry British wit; free tier alongside Professional
+- Game overlay — transparent always-on-top bar showing last 3 You/VERA exchanges; say "show overlay" / "hide overlay" or set a hotkey; position configurable in Settings (Top Left default)
+- Gaming mode — say "start gaming mode" to strip responses to ultra-short, silence idle chatter, and suppress unrecognized command feedback; status bar shows "Gaming Mode" while active; say "stop gaming mode" to exit
+
+## 0.97.4
+- Fixed: note command ignored when transcript starts with "notes." followed by a remember-pattern word — note intent now takes priority at start of transcript
+- Added: date command — "what's the date" / "what day is it" returns current date without requiring Groq
+- Added: install path display in Settings Utilities — shows VERA's install folder with Open and Copy buttons
+- Fixed: voice restart command leaving old instance alive with a dead listener — restart now calls exit directly instead of via daemon thread
+- Help command updated — Reminders, mute/unmute, and date added to both text and overlay help
+
+## 0.97.3
+- Added: mouse side button support — extra mouse buttons (x1/x2) can now be recorded as hold-to-talk or toggle keys
+- Fixed: Record button for toggle key and hold key not updating the text field after recording
+
 ## 0.97.2
 - Fixed: keybind "+ Step" key field not updating after recording a key
 - Fixed: modifier key combos (alt+n, ctrl+shift+f, etc.) not captured — now recorded on key-down using vk fallback when key.char is None under Windows

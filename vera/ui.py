@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QComboBox, QCheckBox, QRadioButton, QButtonGroup,
     QSlider, QTextEdit, QListWidget, QAbstractItemView,
     QTabWidget, QScrollArea, QFrame, QProgressBar, QSizePolicy,
@@ -242,7 +242,8 @@ class _OverlayWidget(QWidget):
 
 def build_ui(window, state: dict, callbacks: dict, constants: dict):
     HOTKEY_CHOICES = constants["HOTKEY_CHOICES"]
-    LANG_CHOICES = constants["LANG_CHOICES"]
+    LANG_CHOICES   = constants["LANG_CHOICES"]
+    _install_path  = constants.get("install_path", "")
 
     # -- Unpack state --
     mode            = state["mode"]
@@ -260,6 +261,9 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     tts_voice       = state["tts_voice"]
     tts_voice_choices = state["tts_voice_choices"]
     personality_mode = state["personality_mode"]
+    overlay_position = state["overlay_position"]
+    overlay_hotkey   = state["overlay_hotkey"]
+    overlay_hotkey_display = state["overlay_hotkey_display"]
     spotify_media   = state["spotify_media"]
     spotify_requires = state["spotify_requires"]
     spotify_keywords = state["spotify_keywords"]
@@ -297,8 +301,9 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     _check_for_updates   = callbacks["check_for_updates"]
     _create_bug_report   = callbacks["create_bug_report"]
     _export_transcripts  = callbacks["export_transcripts"]
-    _clear_pycache       = callbacks["clear_pycache"]
-    _create_shortcuts    = callbacks["create_shortcuts"]
+    _clear_pycache         = callbacks["clear_pycache"]
+    _create_shortcuts      = callbacks["create_shortcuts"]
+    _open_install_folder   = callbacks["open_install_folder"]
     _add_app             = callbacks["add_app"]
     _remove_app          = callbacks["remove_app"]
     _test_app            = callbacks["test_app"]
@@ -535,8 +540,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     hk_edit.textChanged.connect(_on_hk_text_changed)
 
     def _hk_record():
-        _record_hotkey(hotkey)
-        hk_edit.setText(hotkey_display.get())
+        _record_hotkey(hotkey, on_done=lambda: hk_edit.setText(hotkey_display.get()))
 
     hk_rec_btn = _secondary_btn("Record", _hk_record)
     rec_vl.addWidget(_hrow(hk_lbl, hk_edit, hk_rec_btn))
@@ -554,8 +558,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     hold_edit.textChanged.connect(_on_hold_text_changed)
 
     def _hold_record():
-        _record_hold_key(holdkey)
-        hold_edit.setText(holdkey_display.get())
+        _record_hold_key(holdkey, on_done=lambda: hold_edit.setText(holdkey_display.get()))
 
     hold_rec_btn = _secondary_btn("Record", _hold_record)
     rec_vl.addWidget(_hrow(hold_lbl, hold_edit, hold_rec_btn))
@@ -646,7 +649,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         _premium = _is_premium()
     except Exception:
         _premium = False
-    pers_choices = ["default", "professional", "offensive"] if _premium else ["default", "professional"]
+    pers_choices = ["default", "professional", "jarvis", "offensive"] if _premium else ["default", "professional", "jarvis"]
     pers_combo = _make_combo(pers_choices, 160)
     pers_combo.setCurrentText(personality_mode.get())
     pers_combo.currentTextChanged.connect(personality_mode.set)
@@ -658,6 +661,41 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         pers_row.layout().addWidget(pers_note)
     pers_vl.addWidget(pers_row)
     settings_vl.addWidget(pers_card)
+
+    # Game Overlay
+    for w in _section_label("Game Overlay", "A transparent always-on-top bar showing your last 3 voice exchanges. Say 'show overlay' / 'hide overlay' or use a hotkey."):
+        settings_vl.addWidget(w)
+    ovl_card = _card_frame()
+    ovl_vl = QVBoxLayout(ovl_card)
+    ovl_vl.setContentsMargins(12, 8, 12, 8)
+    ovl_vl.setSpacing(6)
+
+    from overlay import POSITION_CHOICES as _OVL_POSITIONS
+    ovl_pos_combo = _make_combo(_OVL_POSITIONS, 160)
+    ovl_pos_combo.setCurrentText(overlay_position.get())
+    ovl_pos_combo.currentTextChanged.connect(overlay_position.set)
+    ovl_pos_row = _hrow(QLabel("Position"), ovl_pos_combo)
+    ovl_pos_row.findChildren(QLabel)[0].setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    ovl_vl.addWidget(ovl_pos_row)
+
+    ovl_hk_edit = _make_entry(160)
+    ovl_hk_edit.setReadOnly(True)
+    ovl_hk_edit.setPlaceholderText("None")
+    ovl_hk_edit.setText(overlay_hotkey_display.get())
+    overlay_hotkey_display.trace_add("write", lambda *_: ovl_hk_edit.setText(overlay_hotkey_display.get()))
+
+    _record_overlay_hotkey = callbacks.get("record_overlay_hotkey")
+
+    def _ovl_hk_record():
+        if _record_overlay_hotkey:
+            _record_overlay_hotkey()
+
+    ovl_hk_btn = _secondary_btn("Record", _ovl_hk_record)
+    ovl_hk_row = _hrow(QLabel("Toggle Hotkey"), ovl_hk_edit, ovl_hk_btn)
+    ovl_hk_row.findChildren(QLabel)[0].setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    ovl_vl.addWidget(ovl_hk_row)
+
+    settings_vl.addWidget(ovl_card)
 
     # Spotify
     for w in _section_label("Spotify", "Control Spotify playback with voice commands like 'play', 'pause', 'next'."):
@@ -724,6 +762,25 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     util_card = _card_frame()
     util_vl = QVBoxLayout(util_card)
     util_vl.setContentsMargins(12, 8, 12, 8)
+
+    # Install path row
+    path_lbl = QLabel("Install Path")
+    path_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 100px;")
+    path_edit = _make_entry(0, _install_path)
+    path_edit.setReadOnly(True)
+    path_edit.setStyleSheet(path_edit.styleSheet() + f"color: {_MUTED};")
+    path_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def _copy_path():
+        QApplication.clipboard().setText(_install_path)
+
+    util_vl.addWidget(_hrow(
+        path_lbl,
+        path_edit,
+        _secondary_btn("Open", _open_install_folder),
+        _secondary_btn("Copy", _copy_path),
+    ))
+
     util_vl.addWidget(_hrow(
         _secondary_btn("Check Updates", _check_for_updates),
         _secondary_btn("Install Deps", _install_deps),

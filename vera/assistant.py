@@ -541,6 +541,9 @@ def main() -> None:
     ]
     tts_voice = SimpleVar(value=cfg.get("tts_voice", "af_heart"))
     personality_mode = SimpleVar(value=cfg.get("personality_mode", "default"))
+    overlay_position = SimpleVar(value=cfg.get("overlay_position", "Top Left"))
+    overlay_hotkey = SimpleVar(value=cfg.get("overlay_hotkey", ""))
+    overlay_hotkey_display = SimpleVar(value=_format_record_key_name(cfg.get("overlay_hotkey", "")))
     bug_report_secret_var = SimpleVar(value=cfg.get("bug_report_secret", "") or "Z3JlZW5pc2RheQ==")
     premium = SimpleVar(value=bool(cfg.get("premium", False)))
     confirm_actions = SimpleVar(value=bool(cfg.get("confirm_actions", False)))
@@ -731,6 +734,8 @@ def main() -> None:
             "tts_output_device": "" if tts_output_device.get() == "Default" else tts_output_device.get(),
             "tts_voice": tts_voice.get(),
             "personality_mode": personality_mode.get(),
+            "overlay_position": overlay_position.get(),
+            "overlay_hotkey": overlay_hotkey.get(),
             "premium": bool(premium.get()),
             "confirm_actions": bool(confirm_actions.get()),
             "spotify_media": bool(spotify_media.get()),
@@ -921,7 +926,7 @@ def main() -> None:
         except Exception:
             pass
 
-    def _record_hotkey(target_var: SimpleVar) -> None:
+    def _record_hotkey(target_var: SimpleVar, on_done=None) -> None:
         try:
             from pynput import keyboard  # type: ignore
         except Exception:
@@ -977,6 +982,8 @@ def main() -> None:
             if combo:
                 target_var.set(combo)
                 status.set(f"Captured: {combo}")
+                if on_done:
+                    _bridge.post(lambda: on_done())
             else:
                 status.set("Canceled")
             try:
@@ -1024,7 +1031,7 @@ def main() -> None:
         _active_recorders.append(listener)
         listener.start()
 
-    def _record_hold_key(target_var: SimpleVar) -> None:
+    def _record_hold_key(target_var: SimpleVar, on_done=None) -> None:
         try:
             from pynput import keyboard  # type: ignore
             from pynput import mouse as pynput_mouse  # type: ignore
@@ -1069,6 +1076,8 @@ def main() -> None:
             if value:
                 target_var.set(value)
                 status.set(f"Captured: {display or value}")
+                if on_done:
+                    _bridge.post(lambda: on_done())
             else:
                 status.set("Canceled")
             try:
@@ -1109,6 +1118,11 @@ def main() -> None:
         active["ms"] = pynput_mouse.Listener(on_click=_on_click)
         _active_recorders.append(active["ms"])
         active["ms"].start()
+
+    def _record_overlay_hotkey() -> None:
+        _record_hotkey(overlay_hotkey, on_done=lambda: overlay_hotkey_display.set(
+            _format_record_key_name(overlay_hotkey.get())
+        ))
 
     def _load_logo():
         logo_path = os.path.join(os.path.dirname(__file__), "data", "assets", "ipa_logo.png")
@@ -1738,6 +1752,9 @@ def main() -> None:
             _idle_timer["handle"] = None
             if not cfg.get("idle_chatter", True):
                 return
+            from skills import _gaming_mode as _gm
+            if _gm["value"]:
+                return
             def _speak():
                 from skills import _tts_speak
                 from personality import get_idle_thought
@@ -1828,8 +1845,32 @@ def main() -> None:
                     status_var.set("Idle")
         _bridge.post(_do)
 
-    from skills import set_mute_status_callback, set_groq_flash_callback
+    def _gaming_mode_status_update(active: bool) -> None:
+        """Called by skills when gaming mode is toggled."""
+        def _do():
+            if active:
+                status_var.set("Gaming Mode")
+                def _hold_gaming():
+                    from skills import _gaming_mode as _gm
+                    if _gm["value"]:
+                        status_var.set("Gaming Mode")
+                        QTimer.singleShot(500, _hold_gaming)
+                QTimer.singleShot(500, _hold_gaming)
+            else:
+                m = _runtime_mode.get("value", "idle")
+                if m == "hold":
+                    status_var.set(f"Listening (hold {holdkey.get()})")
+                elif m == "toggle":
+                    status_var.set(f"Listening (toggle {hotkey.get()})")
+                elif m == "wake":
+                    status_var.set("Wake word active (say 'vera')")
+                else:
+                    status_var.set("Idle")
+        _bridge.post(_do)
+
+    from skills import set_mute_status_callback, set_groq_flash_callback, _gaming_mode as _gm_state
     set_mute_status_callback(_mute_status_update)
+    _gm_state["status_fn"] = _gaming_mode_status_update
 
     _groq_flash_timer = {"handle": None}
 
@@ -2239,6 +2280,13 @@ def main() -> None:
         else:
             _stop_wake_word()
 
+    def _open_install_folder():
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        try:
+            subprocess.Popen(["explorer", base_dir])
+        except Exception:
+            pass
+
     def _create_shortcuts():
         threading.Thread(target=_create_shortcuts_worker, daemon=True).start()
 
@@ -2300,6 +2348,9 @@ def main() -> None:
         "tts_voice": tts_voice,
         "tts_voice_choices": tts_voice_choices,
         "personality_mode": personality_mode,
+        "overlay_position": overlay_position,
+        "overlay_hotkey": overlay_hotkey,
+        "overlay_hotkey_display": overlay_hotkey_display,
         "spotify_media": spotify_media,
         "spotify_requires": spotify_requires,
         "spotify_keywords": spotify_keywords,
@@ -2341,6 +2392,7 @@ def main() -> None:
         "toggle_wake_word": _toggle_wake_word,
         "clear_pycache": _clear_pycache,
         "create_shortcuts": _create_shortcuts,
+        "open_install_folder": _open_install_folder,
         "add_app": _add_app,
         "remove_app": _remove_app,
         "test_app": _test_app,
@@ -2358,11 +2410,13 @@ def main() -> None:
         "add_keybind": _add_keybind,
         "remove_keybind": _remove_keybind,
         "record_keybind_key": _record_keybind_step,
+        "record_overlay_hotkey": _record_overlay_hotkey,
     }
 
     constants = {
         "HOTKEY_CHOICES": HOTKEY_CHOICES,
         "LANG_CHOICES": LANG_CHOICES,
+        "install_path": os.path.dirname(os.path.abspath(__file__)),
     }
 
     widgets = ui.build_ui(window=root, state=state, callbacks=callbacks_ui, constants=constants)
@@ -2416,6 +2470,62 @@ def main() -> None:
             for line in reversed(transcript_history):
                 history_textbox.append(line)
             history_textbox.setReadOnly(True)
+        _game_overlay.push_you(text)
+
+    # =========================================================================
+    #  Game overlay setup
+    # =========================================================================
+    from overlay import GameOverlay
+    _game_overlay = GameOverlay(position=overlay_position.get())
+
+    # Keep overlay position in sync when setting changes
+    overlay_position.trace_add("write", lambda *_: _game_overlay.set_position(overlay_position.get()))
+
+    # Register TTS hook so VERA responses appear in overlay
+    import skills as _skills_mod
+    _skills_mod._tts_hooks.append(
+        lambda t: _bridge.post(lambda _t=t: _game_overlay.push_vera(_t))
+    )
+
+    # Wire overlay show/hide callbacks for voice commands
+    _skills_mod._overlay_callbacks["show"] = lambda: _bridge.post(_game_overlay.show)
+    _skills_mod._overlay_callbacks["hide"] = lambda: _bridge.post(_game_overlay.hide)
+
+    # Overlay hotkey listener
+    _overlay_hk_listener: list = [None]
+
+    def _start_overlay_hotkey_listener():
+        hk = overlay_hotkey.get()
+        if not hk:
+            return
+        try:
+            from pynput import keyboard as _kb
+            key_obj = _resolve_hold_key(hk, _kb)
+            if not key_obj:
+                return
+            def _on_press(key):
+                if key == key_obj:
+                    _bridge.post(_game_overlay.toggle)
+            listener = _kb.Listener(on_press=_on_press)
+            listener.daemon = True
+            listener.start()
+            _overlay_hk_listener[0] = listener
+        except Exception:
+            pass
+
+    def _restart_overlay_hotkey_listener(*_):
+        old = _overlay_hk_listener[0]
+        if old is not None:
+            try:
+                old.stop()
+            except Exception:
+                pass
+            _overlay_hk_listener[0] = None
+        _start_overlay_hotkey_listener()
+
+    overlay_hotkey.trace_add("write", _restart_overlay_hotkey_listener)
+    _start_overlay_hotkey_listener()
+
     # =========================================================================
     #  Init
     # =========================================================================
@@ -2437,6 +2547,8 @@ def main() -> None:
         tts_output_device,
         tts_voice,
         personality_mode,
+        overlay_position,
+        overlay_hotkey,
         premium,
         confirm_actions,
         spotify_media,

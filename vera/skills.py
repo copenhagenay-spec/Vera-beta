@@ -151,9 +151,17 @@ def _kokoro_tts_play(text: str) -> None:
             _log_event(f"TTS_FALLBACK_ERROR: {e2}")
 
 
+_tts_hooks: list = []  # callables(text) registered externally to observe TTS output
+
+
 def _tts_speak(text: str, bypass_mute: bool = False) -> bool:
     if _vera_muted["value"] and not bypass_mute:
         return False
+    for _hook in _tts_hooks:
+        try:
+            _hook(text)
+        except Exception:
+            pass
     try:
         threading.Thread(target=_kokoro_tts_play, args=(text,), daemon=True).start()
         _log_event(f"TTS_SPEAK: {text}")
@@ -826,6 +834,7 @@ def _add_alias(alias: str, target: str) -> bool:
 _last_app: dict = {"name": None, "command": None}
 _saved_volume: dict = {"level": None}  # stores volume before mute so unmute can restore it
 _vera_muted: dict = {"value": False, "status_fn": None}  # mute state + optional UI callback
+_gaming_mode: dict = {"value": False, "status_fn": None}  # gaming mode state + optional UI callback
 _groq_flash_fn = {"fn": None}  # callback to flash status bar when Groq responds
 
 
@@ -1017,6 +1026,12 @@ def _show_help() -> None:
         "  set a timer <n> hours",
         "  cancel timer",
         "",
+        "Reminders:",
+        "  remind me in <n> minutes to <message>",
+        "  remind me at <time> to <message>",
+        "  what are my reminders",
+        "  cancel all reminders",
+        "",
         "Notes:",
         "  note <text>",
         "  open notes",
@@ -1032,8 +1047,13 @@ def _show_help() -> None:
         "",
         "Time & Info:",
         "  what time is it",
+        "  what's the date / what day is it",
         "  what's the weather in <city>",
         "  give me the news",
+        "",
+        "VERA:",
+        "  be quiet / silence",
+        "  you can talk / wake up vera",
         "",
         "System:",
         "  sleep computer",
@@ -1056,6 +1076,7 @@ def _show_help() -> None:
         "",
         "Memory:",
         "  my name is <name>",
+        "  my birthday is <month> <day>",
         "  remember <fact>",
         "  forget <thing>",
         "  what do you know about me",
@@ -1120,6 +1141,12 @@ def _show_help() -> None:
             "set a timer <n> minutes / seconds / hours",
             "cancel timer  /  stop timer",
         ]),
+        ("Reminders", [
+            "remind me in <n> minutes to <message>",
+            "remind me at <time> to <message>",
+            "what are my reminders",
+            "cancel all reminders",
+        ]),
         ("Notes", [
             "note <text>",
             "open notes  /  list notes",
@@ -1130,6 +1157,14 @@ def _show_help() -> None:
             "copy <text>",
             "paste that  /  paste clipboard",
             "clear clipboard",
+        ]),
+        ("Time & Date", [
+            "what time is it",
+            "what's the date  /  what day is it",
+        ]),
+        ("VERA", [
+            "be quiet  /  silence",
+            "you can talk  /  wake up vera",
         ]),
         ("System", [
             "sleep computer",
@@ -1151,6 +1186,7 @@ def _show_help() -> None:
         ]),
         ("Memory", [
             "my name is <name>",
+            "my birthday is <month> <day>",
             "remember <fact>",
             "forget <thing>",
             "what do you know about me",
@@ -1768,6 +1804,57 @@ def _ih_help(m, t, allow_prompt, confirm_fn, restart_fn):
     return True
 
 
+# --- Gaming Mode ---
+_GAMING_CONFIRMS = ["Done", "On it", "Got it", "Done.", "Set.", "Sent.", "Closed."]
+
+
+def _gaming_confirm() -> str:
+    import random
+    return random.choice(_GAMING_CONFIRMS)
+
+
+@_intent(993, r"^(start|enable|turn on|activate)\s+(gaming mode|game mode)$")
+def _ih_gaming_mode_on(m, t, allow_prompt, confirm_fn, restart_fn):
+    _gaming_mode["value"] = True
+    fn = _gaming_mode.get("status_fn")
+    if fn:
+        fn(True)
+    _tts_speak("Gaming mode on.")
+    return True
+
+
+@_intent(993, r"^(stop|disable|turn off|deactivate|exit)\s+(gaming mode|game mode)$")
+def _ih_gaming_mode_off(m, t, allow_prompt, confirm_fn, restart_fn):
+    _gaming_mode["value"] = False
+    fn = _gaming_mode.get("status_fn")
+    if fn:
+        fn(False)
+    _tts_speak("Gaming mode off.")
+    return True
+
+
+# --- Game Overlay ---
+_overlay_callbacks: dict = {"show": None, "hide": None}
+
+
+@_intent(992, r"^(show|open|enable|turn on)\s+(the\s+)?(game\s+)?overlay$")
+def _ih_show_overlay(m, t, allow_prompt, confirm_fn, restart_fn):
+    fn = _overlay_callbacks.get("show")
+    if fn:
+        fn()
+        _tts_speak("Overlay on.")
+    return True
+
+
+@_intent(992, r"^(hide|close|disable|turn off)\s+(the\s+)?(game\s+)?overlay$")
+def _ih_hide_overlay(m, t, allow_prompt, confirm_fn, restart_fn):
+    fn = _overlay_callbacks.get("hide")
+    if fn:
+        fn()
+        _tts_speak("Overlay off.")
+    return True
+
+
 # --- Restart VERA ---
 @_intent(990, r"(\b(restart|reboot)\s+(vera|assistant|the assistant)\b|^(restart|reboot)$)")
 def _ih_restart_vera(m, t, allow_prompt, confirm_fn, restart_fn):
@@ -1775,7 +1862,7 @@ def _ih_restart_vera(m, t, allow_prompt, confirm_fn, restart_fn):
     _clear_session()
     _log_event("RESTART_IPA: voice command")
     if restart_fn is not None:
-        threading.Thread(target=restart_fn, daemon=True).start()
+        restart_fn()  # calls os._exit(0) in finally — process dies here, no race
     return True
 
 
@@ -2155,6 +2242,17 @@ def _ih_notes_delete_last(m, t, allow_prompt, confirm_fn, restart_fn):
 
 
 # --- Notes: add ---
+# High-priority variant: fires when transcript explicitly STARTS with "note/notes",
+# outranking the memory "remember" handler (875) so "note remember to..." saves a note.
+@_intent(886, r"^(note|notes|take a note|add note)\s+(.+)$")
+def _ih_note_add_explicit(m, t, allow_prompt, confirm_fn, restart_fn):
+    note_text = m.group(2).strip()
+    if note_text:
+        _append_note(note_text)
+        _vera_confirm("note")
+    return True
+
+
 @_intent(740, r"\b(note|notes|take a note|add note)\b\s*(.+)?$")
 def _ih_note_add(m, t, allow_prompt, confirm_fn, restart_fn):
     note_text = (m.group(2) or "").strip()
@@ -2771,6 +2869,19 @@ def _ih_time(m, t, allow_prompt, confirm_fn, restart_fn):
     return True
 
 
+# --- Date ---
+@_intent(818, r"\b(what(?:'?s| is) (the |today'?s? )?date|what day is it|what(?:'?s| is) today|today'?s? date)\b")
+def _ih_date(m, t, allow_prompt, confirm_fn, restart_fn):
+    import datetime as _dt
+    now = _dt.datetime.now()
+    day_name  = now.strftime("%A")
+    month     = now.strftime("%B")
+    day       = now.strftime("%d").lstrip("0")
+    year      = now.strftime("%Y")
+    _tts_speak(f"Today is {day_name}, {month} {day}, {year}")
+    return True
+
+
 # --- News ---
 _NEWS_FEEDS = {
     "BBC":         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -2902,9 +3013,11 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
                 _inc_cmd()
                 return True
 
-    if handle_social(t, _tts_speak):
-        return True
+    if not _gaming_mode["value"]:
+        if handle_social(t, _tts_speak):
+            return True
 
     log_unmatched(t)
-    _tts_speak(get_fallback())
+    if not _gaming_mode["value"]:
+        _tts_speak(get_fallback())
     return False

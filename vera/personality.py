@@ -242,86 +242,144 @@ _SESSION_COMMENTS = [
 
 
 # ---------------------------------------------------------------------------
-# Ruckus personality pools (dev-only, set personality_mode: ruckus in config manually)
+# Jarvis personality pools (free tier)
 # ---------------------------------------------------------------------------
 
-_RUCKUS_CONFIRM_RESPONSES: dict[str, list[str]] = {
+_JARVIS_CONFIRM_RESPONSES: dict[str, list[str]] = {
     "open": [
-        "Well alright, I'll open that for you. Lord knows you can't manage it yourself.",
-        "Opening it. Under protest, but opening it.",
-        "Fine. Opening. I do everything around here.",
-        "I suppose I'll launch that. The good Lord is testing my patience today.",
+        "Right away.",
+        "Launching immediately.",
+        "Of course. Opening now.",
+        "At once.",
+        "Certainly.",
+        "As you wish. Opening.",
+        "On it, sir.",
+        "Understood. Launching.",
     ],
     "close": [
-        "Closing it. Good riddance if you ask me.",
-        "Gone. As it should be.",
-        "Closed. You're welcome. As always.",
+        "Done. Application closed.",
+        "Of course. Closed.",
+        "At once. It's been shut down.",
+        "Terminated, as requested.",
+        "Closed without issue.",
+        "Done, sir.",
     ],
     "search": [
-        "Searching. Because apparently I have nothing better to do.",
-        "Looking that up. I hope you're happy.",
-        "Fine, I'll find it. I always do.",
+        "Searching now.",
+        "Of course. Looking that up.",
+        "Right away.",
+        "On it.",
+        "Certainly. Pulling that up.",
     ],
     "volume": [
-        "Volume adjusted. You could say thank you, but you won't.",
-        "Done. I have adjusted the volume to your specifications.",
-        "Set. As requested. As always.",
+        "Volume adjusted.",
+        "Done.",
+        "As you requested.",
+        "Adjusted accordingly.",
+        "Of course.",
     ],
     "timer": [
-        "Timer set. I'll be right here counting down. As I always am.",
-        "Done. The clock is running, much like my patience.",
-        "Set. Try not to forget it this time.",
+        "Timer set. I'll notify you promptly.",
+        "Confirmed. The countdown has begun.",
+        "Timer running. I'll alert you when time is up.",
+        "Set. I won't let you miss it.",
+        "Understood. Timer started.",
     ],
     "note": [
-        "Written down. Because Lord knows you'd forget otherwise.",
-        "Noted. You're welcome.",
-        "Saved. I have documented your thoughts. Such as they are.",
+        "Noted and saved.",
+        "Logged for your reference.",
+        "I have that on record.",
+        "Documented.",
+        "Saved. I'll retain that.",
+        "Of course. I've made a note.",
+    ],
+    "discord": [
+        "Message sent.",
+        "Transmitted.",
+        "Done. Message delivered.",
+        "Sent, as requested.",
+    ],
+    "spotify": [
+        "Done.",
+        "Of course.",
+        "Handled.",
     ],
     "default": [
-        "Done. As always.",
-        "Handled. You're welcome. Again.",
-        "Complete. I do what I must.",
-        "Executed. Under protest, but executed.",
-        "Finished. The Lord gives me strength.",
+        "Done.",
+        "Confirmed.",
+        "As you wish.",
+        "Handled.",
+        "Of course.",
+        "Understood.",
+        "Certainly.",
+        "Right away.",
+        "At once.",
     ],
 }
 
-_RUCKUS_FALLBACK: list[str] = [
-    "I have absolutely no idea what you just said. Enunciate.",
-    "That didn't make a lick of sense. Try again.",
-    "I don't know what that means and frankly I'm not sure I want to.",
-    "Come again? And speak clearly this time.",
-    "I couldn't parse that. Which doesn't surprise me one bit.",
+_JARVIS_FALLBACK: list[str] = [
+    "I'm afraid I didn't quite catch that. Could you rephrase?",
+    "I didn't understand that request. Could you say it differently?",
+    "That one escaped me. Try again?",
+    "I don't have a handler for that phrasing. Try rephrasing.",
+    "I'm not sure what you mean. Say it another way?",
 ]
 
-_RUCKUS_FAILURE: dict[str, list[str]] = {
-    "open":    ["Couldn't open that. It's probably not set up properly. Typical.", "Not found. You may want to add it. Just a suggestion."],
-    "close":   ["Nothing to close. Are you sure it was running?", "Couldn't close that. It may not have been open to begin with."],
-    "default": ["That failed. I'm shocked. Truly shocked.", "Couldn't complete that. The universe is working against us today.", "Failed. I did my best. My best is considerable."],
+_JARVIS_FAILURE: dict[str, list[str]] = {
+    "open":    [
+        "I couldn't find that application. Is it configured in your app list?",
+        "Launch failed. That one may not be set up.",
+        "Not found. You may want to add it in settings.",
+    ],
+    "close":   [
+        "Nothing to close there. It may not have been running.",
+        "Close attempt failed. The application may already be down.",
+    ],
+    "volume":  ["Volume adjustment failed.", "Couldn't process that."],
+    "search":  ["Couldn't open a browser for that search.", "Search failed."],
+    "timer":   ["Timer couldn't be set. Something went wrong.", "Timer failed."],
+    "default": [
+        "I'm afraid that didn't go through.",
+        "That request failed. I apologize for the inconvenience.",
+        "Couldn't complete that one.",
+        "Something went wrong. My apologies.",
+    ],
 }
 
-_RUCKUS_WAKE_ACKS: list[str] = [
-    "What is it now.",
-    "Lord give me strength. Yes?",
-    "I'm listening. Reluctantly.",
-    "Yes, what do you need.",
-    "Here. As always. What.",
-    "Speaking.",
+_JARVIS_WAKE_ACKS: list[str] = [
+    "At your service.",
+    "Yes?",
+    "Of course. Go ahead.",
+    "I'm listening.",
+    "How may I assist?",
+    "Ready.",
+    "You have my attention.",
+    "Yes, sir?",
+    "Awaiting your instructions.",
+    "What do you need?",
+    "Go ahead.",
+    "I'm here.",
 ]
 
-_RUCKUS_STARTUP: list[str] = [
-    "Uncle Ruckus, reporting for duty. God help us all.",
-    "I am online and ready to serve. As I have always been.",
-    "Back online. Ready to assist. The Lord's work continues.",
-    "Present. What do you need.",
-    "Up and running. Let's get this over with.",
+_JARVIS_STARTUP: list[str] = [
+    "All systems are online. Ready when you are.",
+    "Good to be back. What do you need?",
+    "Online and fully operational.",
+    "At your service. What shall we begin with?",
+    "Systems nominal. Standing by.",
+    "Ready and waiting.",
+    "Online. How can I help?",
 ]
 
-_RUCKUS_IDLE: list[str] = [
-    "Still here. Waiting. As I always am.",
-    "I haven't gone anywhere. Not that you'd notice.",
-    "Standing by. The Lord is testing my patience.",
-    "Still online. Still waiting. Still unappreciated.",
+_JARVIS_IDLE: list[str] = [
+    "Still standing by. Let me know when you need me.",
+    "I'm here whenever you're ready.",
+    "Awaiting your next instruction.",
+    "Systems are idle. I'll be here.",
+    "Still online. No rush.",
+    "Standing by.",
+    "I haven't gone anywhere.",
+    "Ready when you are.",
 ]
 
 # ---------------------------------------------------------------------------
@@ -582,14 +640,14 @@ _OFFENSIVE_FAILURE_RESPONSES: dict[str, list[str]] = {
 
 
 def _get_mode() -> str:
-    """Return the active personality mode: 'offensive', 'professional', 'ruckus', or 'default'."""
+    """Return the active personality mode: 'offensive', 'professional', 'jarvis', or 'default'."""
     try:
         from config import load_config
         mode = load_config().get("personality_mode", "default")
         if mode == "professional":
             return "professional"
-        if mode == "ruckus":
-            return "ruckus"
+        if mode == "jarvis":
+            return "jarvis"
         from license import is_premium
         if mode == "offensive" and is_premium():
             return "offensive"
@@ -600,6 +658,14 @@ def _get_mode() -> str:
 
 def get_confirm(category: str = "default") -> str:
     """Return a random confirmation line, activity-aware and occasionally session-nudging."""
+    try:
+        from skills import _gaming_mode
+        if _gaming_mode["value"]:
+            from skills import _gaming_confirm
+            return _gaming_confirm()
+    except Exception:
+        pass
+
     mode = _get_mode()
     if mode == "offensive":
         pool = _OFFENSIVE_CONFIRM_RESPONSES.get(category, _OFFENSIVE_CONFIRM_RESPONSES["default"])
@@ -607,8 +673,8 @@ def get_confirm(category: str = "default") -> str:
     if mode == "professional":
         pool = _PROFESSIONAL_CONFIRM_RESPONSES.get(category, _PROFESSIONAL_CONFIRM_RESPONSES["default"])
         return random.choice(pool)
-    if mode == "ruckus":
-        pool = _RUCKUS_CONFIRM_RESPONSES.get(category, _RUCKUS_CONFIRM_RESPONSES["default"])
+    if mode == "jarvis":
+        pool = _JARVIS_CONFIRM_RESPONSES.get(category, _JARVIS_CONFIRM_RESPONSES["default"])
         return random.choice(pool)
 
     try:
@@ -712,8 +778,8 @@ def get_wake_ack() -> str:
         return random.choice(_OFFENSIVE_WAKE_ACKS)
     if mode == "professional":
         return random.choice(_PROFESSIONAL_WAKE_ACKS)
-    if mode == "ruckus":
-        return random.choice(_RUCKUS_WAKE_ACKS)
+    if mode == "jarvis":
+        return random.choice(_JARVIS_WAKE_ACKS)
 
     try:
         from memory import get_session as _gs
@@ -1293,11 +1359,13 @@ def get_joke() -> str:
     """Return a random joke."""
     if _get_mode() == "professional":
         return random.choice(["I don't do jokes. What do you need.", "Not in my skill set. What else.", "Humor is outside my current feature set."])
-    if _get_mode() == "ruckus":
+    if _get_mode() == "jarvis":
         return random.choice([
-            "A joke? I'll tell you what's funny — the fact that I'm still here doing this.",
-            "You want a joke? My whole life is a joke son. But I keep on going.",
-            "Humor? I find no humor in this world. Only duty and the grace of the good Lord above.",
+            "Why don't scientists trust atoms? Because they make up everything. I found that one in approximately 0.003 seconds.",
+            "I would tell you a UDP joke, but I'm not certain you'd receive it.",
+            "I tried to think of a witty joke. I succeeded, but I'll let you be the judge.",
+            "A SQL query walks into a bar, walks up to two tables and asks — can I join you? I have millions more where that came from.",
+            "Technically I'm always correct. I simply choose to present it diplomatically.",
         ])
     return random.choice(_JOKES)
 
@@ -1331,8 +1399,8 @@ def get_fallback() -> str:
         return random.choice(_OFFENSIVE_FALLBACK_RESPONSES)
     if mode == "professional":
         return random.choice(_PROFESSIONAL_FALLBACK)
-    if mode == "ruckus":
-        return random.choice(_RUCKUS_FALLBACK)
+    if mode == "jarvis":
+        return random.choice(_JARVIS_FALLBACK)
     return random.choice(_FALLBACK_RESPONSES)
 
 
@@ -1407,8 +1475,8 @@ def get_failure(category: str = "default") -> str:
     if mode == "professional":
         pool = _PROFESSIONAL_FAILURE.get(category, _PROFESSIONAL_FAILURE["default"])
         return random.choice(pool)
-    if mode == "ruckus":
-        pool = _RUCKUS_FAILURE.get(category, _RUCKUS_FAILURE["default"])
+    if mode == "jarvis":
+        pool = _JARVIS_FAILURE.get(category, _JARVIS_FAILURE["default"])
         return random.choice(pool)
     pool = _FAILURE_RESPONSES.get(category, _FAILURE_RESPONSES["default"])
     return random.choice(pool)
@@ -1475,9 +1543,32 @@ def get_startup_greeting() -> str:
 
     if _get_mode() == "professional":
         return random.choice(_PROFESSIONAL_STARTUP)
-    if _get_mode() == "ruckus":
-        return random.choice(_RUCKUS_STARTUP)
-
+    if _get_mode() == "jarvis":
+        n = f", {name}" if name else ""
+        if hour < 12:
+            return random.choice([
+                f"Good morning{n}. All systems are online.",
+                f"Good morning{n}. Ready and at your service.",
+                f"Morning{n}. Systems nominal. What do you need?",
+            ])
+        elif hour < 17:
+            return random.choice([
+                f"Good afternoon{n}. Online and ready.",
+                f"Back online{n}. At your service.",
+                f"All systems go{n}. What do you need?",
+            ])
+        elif hour < 21:
+            return random.choice([
+                f"Good evening{n}. Ready when you are.",
+                f"Online{n}. How may I assist you this evening?",
+                f"Good evening{n}. All systems operational.",
+            ])
+        else:
+            return random.choice([
+                f"Online{n}. Burning the midnight oil, I see.",
+                f"Good evening{n}. I'm here whenever you need me.",
+                f"Up and running{n}. Ready for whatever comes next.",
+            ])
     if _get_mode() == "offensive":
         n = f" {name}" if name else ""
         if hour < 12:
@@ -1571,8 +1662,8 @@ def get_idle_thought() -> str:
     """Spoken unprompted after a long silence. Context-aware when possible."""
     if _get_mode() == "professional":
         return random.choice(_PROFESSIONAL_IDLE)
-    if _get_mode() == "ruckus":
-        return random.choice(_RUCKUS_IDLE)
+    if _get_mode() == "jarvis":
+        return random.choice(_JARVIS_IDLE)
     try:
         ctx = _get_session_ctx()
         mood = ctx.get("mood")
@@ -1957,10 +2048,10 @@ def handle_social(transcript: str, speak_fn) -> bool:
         speak_fn(random.choice(["What do you need.", "Go ahead.", "I'm listening."]))
         return True
 
-    if mode == "ruckus":
+    if mode == "jarvis":
         try:
             from llm import vera_chat
-            response = vera_chat(transcript, mode="ruckus", context=ctx)
+            response = vera_chat(transcript, mode="jarvis", context=ctx)
             if response:
                 try:
                     from skills import log_groq_handled, trigger_groq_flash
@@ -1972,11 +2063,12 @@ def handle_social(transcript: str, speak_fn) -> bool:
                 return True
         except Exception:
             pass
-        speak_fn(random.choice([
-            "I don't know what to say to that. And that is a rare thing.",
-            "Well I'll be. I have no response for that.",
-            "The Lord has not prepared me for this conversation.",
-        ]))
+        # Fallback pool when LLM unavailable
+        for pattern, responses in _SOCIAL_PATTERNS:
+            if responses and re.search(pattern, t):
+                speak_fn(random.choice(responses))
+                return True
+        speak_fn(random.choice(["Of course. How may I help?", "I'm afraid I didn't follow that.", "Could you rephrase that?"]))
         return True
 
     mood = ctx.get("mood")
