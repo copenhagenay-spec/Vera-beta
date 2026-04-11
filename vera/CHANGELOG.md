@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.97.1
+- Fixed: VERA not launching on Python 3.11/3.12/3.13 installs — launcher now searches known Python paths instead of relying on PATH
+- Fixed: `run_ipa.cmd` hardcoded to Python 3.14 only — now tries all supported versions
+
 ## 0.97.0
 - UI rebuilt on PySide6/Qt6 — eliminates scroll tearing, uses native OS rendering
 - Silent installer — pip, espeak-ng, and Kokoro model files all download and install automatically with progress shown in the installer UI (no terminal window)

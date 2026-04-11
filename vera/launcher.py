@@ -14,6 +14,24 @@ if getattr(sys, 'frozen', False):
 else:
     base = os.path.dirname(os.path.abspath(__file__))
 
-pythonw = shutil.which("pythonw") or shutil.which("python")
+def _find_pythonw():
+    local = os.environ.get("LOCALAPPDATA", "")
+    pf    = os.environ.get("ProgramFiles", "")
+    candidates = [
+        os.path.join(local, r"Programs\Python\Python314\pythonw.exe"),
+        os.path.join(local, r"Programs\Python\Python313\pythonw.exe"),
+        os.path.join(local, r"Programs\Python\Python312\pythonw.exe"),
+        os.path.join(local, r"Programs\Python\Python311\pythonw.exe"),
+        os.path.join(pf,    r"Python314\pythonw.exe"),
+        os.path.join(pf,    r"Python313\pythonw.exe"),
+        os.path.join(pf,    r"Python312\pythonw.exe"),
+        os.path.join(pf,    r"Python311\pythonw.exe"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return shutil.which("pythonw") or shutil.which("python")
+
+pythonw   = _find_pythonw()
 assistant = os.path.join(base, "assistant.py")
 subprocess.Popen([pythonw, assistant], cwd=base)
