@@ -154,15 +154,19 @@ class BackgroundListener:
         from pynput import keyboard  # type: ignore
 
         def _record():
-            if on_record_start:
-                on_record_start()
-            text = _run_hold(self.stop_event, toggle_key, model_path, confirm_fn=confirm_fn, restart_fn=restart_fn)
-            if on_record_end:
-                on_record_end()
-            if on_text and text:
-                on_text(text)
-            self.recording_flag.clear()
-            self.stop_event.clear()
+            try:
+                if on_record_start:
+                    on_record_start()
+                text = _run_hold(self.stop_event, toggle_key, model_path, confirm_fn=confirm_fn, restart_fn=restart_fn)
+                if on_record_end:
+                    on_record_end()
+                if on_text and text:
+                    on_text(text)
+            except Exception:
+                pass
+            finally:
+                self.recording_flag.clear()
+                self.stop_event.clear()
 
         key_obj = _resolve_hold_key(toggle_key, keyboard)
         if not key_obj:
@@ -190,15 +194,19 @@ class BackgroundListener:
         from pynput import keyboard  # type: ignore
 
         def _record():
-            if on_record_start:
-                on_record_start()
-            text = _run_hold(self.stop_event, hold_key, model_path, confirm_fn=confirm_fn, restart_fn=restart_fn)
-            if on_record_end:
-                on_record_end()
-            if on_text and text:
-                on_text(text)
-            self.recording_flag.clear()
-            self.stop_event.clear()
+            try:
+                if on_record_start:
+                    on_record_start()
+                text = _run_hold(self.stop_event, hold_key, model_path, confirm_fn=confirm_fn, restart_fn=restart_fn)
+                if on_record_end:
+                    on_record_end()
+                if on_text and text:
+                    on_text(text)
+            except Exception:
+                pass
+            finally:
+                self.recording_flag.clear()
+                self.stop_event.clear()
 
         if _is_mouse_button(hold_key):
             from pynput import mouse  # type: ignore
@@ -1534,7 +1542,7 @@ def main() -> None:
             suffix = f" x{count}" if int(count) > 1 else ""
             keybinds_textbox.addItem(f"{kb.get('phrase')}  ->  {kb.get('key')}{suffix}")
 
-    def _record_keybind_step(target_var: SimpleVar) -> None:
+    def _record_keybind_step(target_var: SimpleVar, on_done=None) -> None:
         """Record a single key/combo and append it as a macro step."""
         try:
             from pynput import keyboard as _kb  # type: ignore
@@ -1574,6 +1582,9 @@ def main() -> None:
                 else:
                     target_var.set(value)
                 status.set(f"Added: {display or value}")
+                if on_done:
+                    _new = target_var.get()
+                    _bridge.post(lambda v=_new: on_done(v))
             else:
                 status.set("Canceled")
             try:
@@ -1583,14 +1594,36 @@ def main() -> None:
                 pass
             dialog.after(400, dialog.destroy)
 
+        def _key_name(key):
+            """Get a canonical name for a non-modifier key, even when held with alt/ctrl."""
+            if isinstance(key, _kb.KeyCode):
+                # key.char may be None or a weird Unicode when a modifier is held —
+                # fall back to the virtual key code to get the base character.
+                if key.char and key.char.isprintable() and not _mod_name(key):
+                    return key.char.lower()
+                if hasattr(key, "vk") and key.vk and 32 <= key.vk <= 126:
+                    return chr(key.vk).lower()
+                return None
+            name = getattr(key, "name", None)
+            return name.lower() if name else None
+
         def _on_press(key):
             if key == _kb.Key.esc:
                 _finish(None)
                 return False
             mn = _mod_name(key)
-            if mn and mn not in pressed_mods:
-                pressed_mods.append(mn)
+            if mn:
+                if mn not in pressed_mods:
+                    pressed_mods.append(mn)
                 return
+            # Non-modifier pressed while modifiers are held — capture combo immediately
+            # (on_release is unreliable when alt is involved: char becomes None/garbage)
+            if pressed_mods:
+                name = _key_name(key)
+                if name:
+                    parts = pressed_mods[:] + [name]
+                    _finish("+".join(parts))
+                return False
 
         def _on_release(key):
             mn = _mod_name(key)
@@ -1598,21 +1631,12 @@ def main() -> None:
                 if mn in pressed_mods:
                     pressed_mods.remove(mn)
                 return
-            name = None
-            if isinstance(key, _kb.KeyCode) and key.char:
-                name = key.char.lower()
-            elif key == _kb.Key.space:
-                name = "space"
-            else:
-                name = getattr(key, "name", None)
-                if name:
-                    name = name.lower()
+            # No modifiers held — simple single key, capture on release
+            name = _key_name(key)
             if not name:
                 _finish(None)
                 return False
-            parts = pressed_mods + [name]
-            combo = "+".join(parts)
-            _finish(combo, combo)
+            _finish(name)
             return False
 
         def _on_click(x, y, button, pressed):
@@ -2035,7 +2059,27 @@ def main() -> None:
             return
         tray_icon["icon"] = icon
         tray_ready["ok"] = True
-        threading.Thread(target=icon.run, daemon=True).start()
+
+        def _tray_loop():
+            import time as _time
+            current = tray_icon["icon"]
+            while not _quitting["flag"]:
+                try:
+                    current.run()
+                except Exception:
+                    pass
+                # run() returned — Explorer restarted or icon was stopped.
+                # Rebuild and relaunch unless we're actually quitting.
+                if _quitting["flag"]:
+                    break
+                _time.sleep(1)
+                rebuilt = _create_tray_icon()
+                if rebuilt is None:
+                    break
+                tray_icon["icon"] = rebuilt
+                current = rebuilt
+
+        threading.Thread(target=_tray_loop, daemon=True).start()
 
     def _on_close():
         if tray_ready["ok"]:

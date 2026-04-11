@@ -860,8 +860,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     kb_key_edit.textChanged.connect(keybind_key_var.set)
 
     def _do_record_keybind():
-        _record_keybind_key(keybind_key_var)
-        kb_key_edit.setText(keybind_key_var.get())
+        _record_keybind_key(keybind_key_var, on_done=lambda v: kb_key_edit.setText(v))
 
     kb_step_btn = _secondary_btn("+ Step", _do_record_keybind)
     kb_cvl.addWidget(_hrow(kb_key_lbl, kb_key_edit, kb_step_btn))

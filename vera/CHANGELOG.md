@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.97.2
+- Fixed: keybind "+ Step" key field not updating after recording a key
+- Fixed: modifier key combos (alt+n, ctrl+shift+f, etc.) not captured — now recorded on key-down using vk fallback when key.char is None under Windows
+- Fixed: hold-to-talk occasionally freezing — recording_flag now cleared in finally block so a background exception can no longer leave the listener stuck
+- Fixed: tray icon not recovering after Windows Explorer restart — tray loop now auto-rebuilds the icon instead of staying gone
+
 ## 0.97.1
 - Fixed: VERA not launching on Python 3.11/3.12/3.13 installs — launcher now searches known Python paths instead of relying on PATH
 - Fixed: `run_ipa.cmd` hardcoded to Python 3.14 only — now tries all supported versions
