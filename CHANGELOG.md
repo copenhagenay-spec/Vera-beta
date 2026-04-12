@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.97.6.1
+- Added: idle chatter toggle — "Enable idle chatter" checkbox in Settings → Personality; checked by default; uncheck to stop VERA from speaking unless spoken to
+
 ## 0.97.6
 - Added: collapsible list sections — Voice Actions, Key Binds, Registered Apps, and App Aliases now collapse by default with item count shown in header
 - Added: Setup wizard redesign — accent header bar, card layout, blue Finish Setup button

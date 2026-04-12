@@ -628,6 +628,7 @@ def main() -> None:
     bug_report_secret_var = SimpleVar(value=cfg.get("bug_report_secret", "") or "Z3JlZW5pc2RheQ==")
     premium = SimpleVar(value=bool(cfg.get("premium", False)))
     confirm_actions = SimpleVar(value=bool(cfg.get("confirm_actions", False)))
+    idle_chatter    = SimpleVar(value=bool(cfg.get("idle_chatter", True)))
     spotify_media = SimpleVar(value=bool(cfg.get("spotify_media", False)))
     spotify_requires = SimpleVar(value=bool(cfg.get("spotify_requires_keyword", False)))
     spotify_keywords = SimpleVar(value=str(cfg.get("spotify_keywords", "spotify")))
@@ -822,6 +823,7 @@ def main() -> None:
             "font_scale": font_scale.get(),
             "premium": bool(premium.get()),
             "confirm_actions": bool(confirm_actions.get()),
+            "idle_chatter": bool(idle_chatter.get()),
             "spotify_media": bool(spotify_media.get()),
             "spotify_requires_keyword": bool(spotify_requires.get()),
             "spotify_keywords": spotify_keywords.get().strip(),
@@ -1947,13 +1949,13 @@ def main() -> None:
             except Exception:
                 pass
             _idle_timer["handle"] = None
-        if not cfg.get("idle_chatter", True):
+        if not idle_chatter.get():
             return
         idle_ms = int(cfg.get("idle_minutes", 45)) * 60 * 1000
 
         def _fire_idle():
             _idle_timer["handle"] = None
-            if not cfg.get("idle_chatter", True):
+            if not idle_chatter.get():
                 return
             from skills import _gaming_mode as _gm
             if _gm["value"]:
@@ -2560,6 +2562,7 @@ def main() -> None:
         "holdkey_display": holdkey_display,
         "search_engine": search_engine,
         "confirm_actions": confirm_actions,
+        "idle_chatter": idle_chatter,
         "ptt_beep_volume": ptt_beep_volume,
         "tts_output_device": tts_output_device,
         "tts_device_choices": tts_device_choices,
@@ -2833,7 +2836,7 @@ def main() -> None:
                 _run_wizard()
             else:
                 _start_background()
-                if cfg.get("idle_chatter", True):
+                if idle_chatter.get():
                     def _do_startup_greeting():
                         import time as _t
                         _t.sleep(2.0)

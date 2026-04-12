@@ -337,6 +337,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     holdkey_display = state["holdkey_display"]
     search_engine   = state["search_engine"]
     confirm_actions = state["confirm_actions"]
+    idle_chatter    = state["idle_chatter"]
     ptt_beep_volume = state["ptt_beep_volume"]
     tts_output_device = state["tts_output_device"]
     tts_device_choices = state["tts_device_choices"]
@@ -759,6 +760,19 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         pers_note.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
         pers_row.layout().addWidget(pers_note)
     pers_vl.addWidget(pers_row)
+
+    chatter_chk = QCheckBox("Enable idle chatter")
+    chatter_chk.setChecked(bool(idle_chatter.get()))
+    chatter_chk.stateChanged.connect(lambda v: idle_chatter.set(bool(v)))
+    chatter_desc = QLabel("VERA will speak unprompted after periods of inactivity")
+    chatter_desc.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    chatter_row = QWidget()
+    chatter_row_l = QHBoxLayout(chatter_row)
+    chatter_row_l.setContentsMargins(0, 4, 0, 0)
+    chatter_row_l.setSpacing(8)
+    chatter_row_l.addWidget(chatter_chk)
+    chatter_row_l.addWidget(chatter_desc, 1)
+    pers_vl.addWidget(chatter_row)
     settings_vl.addWidget(pers_card)
 
     # Game Overlay
