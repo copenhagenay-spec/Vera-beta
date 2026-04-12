@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.97.6.2
+- Fixed: Ctrl+Scroll text scaling now works on all tabs — collapsible list headers (Registered Apps, App Aliases, Voice Actions, Key Binds) and description labels throughout the UI now scale correctly
+
 ## 0.97.6.1
 - Added: idle chatter toggle — "Enable idle chatter" checkbox in Settings → Personality; checked by default; uncheck to stop VERA from speaking unless spoken to
 

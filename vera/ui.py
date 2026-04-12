@@ -214,7 +214,7 @@ def _collapsible_list(title: str, height_rows: int = 6):
         QPushButton {
             background: transparent;
             color: #ffffff;
-            font-size: 14px; font-weight: bold;
+            font-weight: bold;
             text-align: left;
             border: none;
             padding: 4px 0px;
@@ -222,6 +222,8 @@ def _collapsible_list(title: str, height_rows: int = 6):
         }
         QPushButton:hover { color: #cccccc; }
     """)
+    header.setFont(_make_scalable_font(14, bold=True))
+    _scalable_labels.append((header, 14, True))
 
     def _refresh():
         arrow = "\u25bc" if lb.isVisible() else "\u25b6"
@@ -238,6 +240,15 @@ def _collapsible_list(title: str, height_rows: int = 6):
     vl.addWidget(header)
     vl.addWidget(lb)
     return container, lb
+
+
+def _hint_label(text: str, color: str = _MUTED) -> QLabel:
+    """Muted description label that participates in Ctrl+Scroll font scaling."""
+    lbl = QLabel(text)
+    lbl.setStyleSheet(f"color: {color};")
+    lbl.setFont(_make_scalable_font(11))
+    _scalable_labels.append((lbl, 11, False))
+    return lbl
 
 
 def _section_label(text, help_text=None) -> tuple:
@@ -700,8 +711,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     vo_combo = _make_combo(tts_device_choices, 260)
     vo_combo.setCurrentText(tts_output_device.get() or "Default")
     vo_combo.currentTextChanged.connect(tts_output_device.set)
-    vo_hint = QLabel("  Select your virtual mic (e.g. VB-Cable) to route TTS to Discord")
-    vo_hint.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    vo_hint = _hint_label("  Select your virtual mic (e.g. VB-Cable) to route TTS to Discord")
     rec_vl.addWidget(_hrow(vo_lbl, vo_combo, vo_hint))
 
     # Voice row
@@ -711,8 +721,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     voice_combo = _make_combo(tts_voice_choices, 160)
     voice_combo.setCurrentText(tts_voice.get())
     voice_combo.currentTextChanged.connect(tts_voice.set)
-    voice_hint = QLabel("  Choose VERA's voice (takes effect immediately)")
-    voice_hint.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    voice_hint = _hint_label("  Choose VERA's voice (takes effect immediately)")
     rec_vl.addWidget(_hrow(voice_lbl, voice_combo, voice_hint))
     settings_vl.addWidget(rec_card)
 
@@ -730,8 +739,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     confirm_chk.setStyleSheet(_CHECK_STYLE)
     confirm_chk.setChecked(bool(confirm_actions.get()))
     confirm_chk.stateChanged.connect(lambda s: confirm_actions.set(s == Qt.Checked.value))
-    confirm_desc = QLabel("VERA will ask you to confirm before opening apps or running commands.")
-    confirm_desc.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    confirm_desc = _hint_label("VERA will ask you to confirm before opening apps or running commands.")
     confirm_desc.setWordWrap(True)
     confirm_row_l.addWidget(confirm_chk)
     confirm_row_l.addWidget(confirm_desc, 1)
@@ -756,16 +764,14 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     pers_row = _hrow(QLabel("Mode"), pers_combo)
     pers_row.findChildren(QLabel)[0].setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
     if not _premium:
-        pers_note = QLabel("  Offensive mode requires a Premium license")
-        pers_note.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+        pers_note = _hint_label("  Offensive mode requires a Premium license")
         pers_row.layout().addWidget(pers_note)
     pers_vl.addWidget(pers_row)
 
     chatter_chk = QCheckBox("Enable idle chatter")
     chatter_chk.setChecked(bool(idle_chatter.get()))
     chatter_chk.stateChanged.connect(lambda v: idle_chatter.set(bool(v)))
-    chatter_desc = QLabel("VERA will speak unprompted after periods of inactivity")
-    chatter_desc.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    chatter_desc = _hint_label("VERA will speak unprompted after periods of inactivity")
     chatter_row = QWidget()
     chatter_row_l = QHBoxLayout(chatter_row)
     chatter_row_l.setContentsMargins(0, 4, 0, 0)
@@ -864,8 +870,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     bday_day_combo = _make_combo([""] + [str(d) for d in range(1, 32)], 80)
     bday_day_combo.setCurrentText(birthday_day.get())
     bday_day_combo.currentTextChanged.connect(birthday_day.set)
-    bday_hint = QLabel("  Leave blank to disable")
-    bday_hint.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    bday_hint = _hint_label("  Leave blank to disable")
     bday_vl.addWidget(_hrow(bday_month_lbl, bday_month_combo, bday_day_lbl, bday_day_combo, bday_hint))
     settings_vl.addWidget(bday_card)
 
@@ -915,8 +920,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
 
     _ra_spacer = QWidget(); _ra_spacer.setFixedHeight(6)
     apps_vl.addWidget(_ra_spacer)
-    _ra_help = QLabel("Say 'open <app name>' to launch an app.")
-    _ra_help.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    _ra_help = _hint_label("Say 'open <app name>' to launch an app.")
     apps_vl.addWidget(_ra_help)
     _ra_container, apps_textbox = _collapsible_list("Registered Apps", 6)
     apps_vl.addWidget(_ra_container)
@@ -944,8 +948,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
 
     _aa_spacer = QWidget(); _aa_spacer.setFixedHeight(6)
     apps_vl.addWidget(_aa_spacer)
-    _aa_help = QLabel("Create shortcuts — say the alias to launch the target app.")
-    _aa_help.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    _aa_help = _hint_label("Create shortcuts — say the alias to launch the target app.")
     apps_vl.addWidget(_aa_help)
     _aa_container, aliases_textbox = _collapsible_list("App Aliases", 4)
     apps_vl.addWidget(_aa_container)
@@ -991,8 +994,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
 
     _va_spacer = QWidget(); _va_spacer.setFixedHeight(6)
     integ_vl.addWidget(_va_spacer)
-    _va_help = QLabel("Map a spoken phrase to a shell command.\nExample: `lock my computer` -> `rundll32.exe user32.dll,LockWorkStation`")
-    _va_help.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    _va_help = _hint_label("Map a spoken phrase to a shell command.\nExample: `lock my computer` -> `rundll32.exe user32.dll,LockWorkStation`")
     _va_help.setWordWrap(True)
     integ_vl.addWidget(_va_help)
     _va_container, actions_textbox = _collapsible_list("Voice Actions", 6)
@@ -1019,11 +1021,9 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
 
     _kb_spacer = QWidget(); _kb_spacer.setFixedHeight(6)
     integ_vl.addWidget(_kb_spacer)
-    _kb_help = QLabel("Say a phrase to press a key (e.g. 'reload' → r).")
-    _kb_help.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    _kb_help = _hint_label("Say a phrase to press a key (e.g. 'reload' → r).")
     integ_vl.addWidget(_kb_help)
-    warn_lbl = QLabel("⚠ Do not use in games protected by EAC or BattlEye — synthetic input may be flagged.")
-    warn_lbl.setStyleSheet(f"color: {_WARN_FG}; font-size: 11px;")
+    warn_lbl = _hint_label("⚠ Do not use in games protected by EAC or BattlEye — synthetic input may be flagged.", color=_WARN_FG)
     warn_lbl.setWordWrap(True)
     integ_vl.addWidget(warn_lbl)
     _kb_container, keybinds_textbox = _collapsible_list("Key Binds", 6)
@@ -1137,13 +1137,12 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         _primary_btn("Add Channel", _add_discord_channel),
         _danger_btn("Remove Selected", _remove_discord_channel),
     ))
-    cmd_hint = QLabel(
+    cmd_hint = _hint_label(
         "Commands\n"
         "discord <channel> <message>\n"
         "discord <server> <channel> <message>\n"
         "read discord <server> <channel>"
     )
-    cmd_hint.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
     discord_vl.addWidget(cmd_hint)
     discord_vl.addStretch()
 
@@ -1218,8 +1217,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         _secondary_btn("Dismiss", _dismiss_selected),
         _muted_btn("Refresh", _refresh_unmatched),
     ))
-    saved_hint = QLabel("Saved corrections take effect immediately — no restart needed.")
-    saved_hint.setStyleSheet(f"color: {_MUTED}; font-size: 11px;")
+    saved_hint = _hint_label("Saved corrections take effect immediately — no restart needed.")
     training_vl.addWidget(saved_hint)
 
     for w in _section_label("Groq Handled", "Things VERA answered via AI that could become real skills."):
