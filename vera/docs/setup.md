@@ -1,94 +1,78 @@
 # VERA Setup Guide
 
-This guide walks you through everything you need to get VERA up and running from scratch.
+This guide walks you through getting VERA up and running from scratch.
 
 ---
 
-## Step 1 — Download VERA
+## Step 1 — Download the Installer
 
-1. Go to the [VERA GitHub releases page](https://github.com/copenhagenay-spec/VERA-alpha/releases)
-2. Download the latest version zip
-3. Extract it to a folder you won't move — VERA runs from wherever you put it
-
-> **Tip:** A good place is somewhere like `C:\VERA\` or your Desktop. Avoid putting it inside Program Files.
+1. Go to the [VERA releases page](https://github.com/copenhagenay-spec/Vera-beta/releases)
+2. Download the latest `VERA_Setup_x.x.x.exe`
 
 ---
 
-## Step 2 — Install Dependencies
+## Step 2 — Run the Installer
 
-Double-click **`setup.cmd`** first. This installs all the Python packages VERA needs to run. A command prompt window will open and close automatically when done.
+Double-click the installer and follow the prompts. The installer handles everything automatically:
 
-> If you see any errors here, make sure Python is installed on your PC. Download it from [python.org](https://python.org) — make sure to check **"Add Python to PATH"** during install.
+- Python package dependencies
+- espeak-ng voice engine
+- Kokoro TTS model files (~310MB, downloaded once)
 
-> You only need to run `setup.cmd` once.
+A progress screen shows each step. This takes a minute or two depending on your connection.
 
----
-
-## Step 3 — Run the Setup Wizard
-
-Once dependencies are installed, double-click **`run_ipa.cmd`**. The setup wizard will open automatically.
-
-The wizard walks you through the rest of the setup — language model download, push to talk configuration, Steam import, and shortcut creation. Work through each section top to bottom and click **Finish** when done. VERA will launch immediately after.
+> **Note:** You do not need to install Python manually — VERA's installer finds your existing Python installation. If Python is not installed, get it from [python.org](https://python.org) (3.11 or newer, check **"Add Python to PATH"**).
 
 ---
 
-## Step 4 — Download a Language Model
+## Step 3 — Setup Wizard
 
-VERA needs a voice recognition model to understand what you say. There are two options:
+VERA opens the setup wizard automatically on first launch. Work through each section and click **Finish** when done.
 
-| Model | Size | Best For |
-|---|---|---|
-| **English (Small)** | ~40MB | Fast download, decent accuracy |
-| **English (Standard)** | ~128MB | Better accuracy, handles accents well |
+### Listening Mode
 
-Click the button for your preferred model and wait for the download to complete. A confirmation message will appear when it's done.
+Choose how VERA listens for your commands:
 
-> **Recommendation:** If you have a non-standard accent or find the small model misses words, go with the Standard model.
+| Mode | How it works |
+|---|---|
+| **Wake Word** | Say "vera" to activate, then speak your command |
+| **Hold-to-talk** | Hold a key or button while speaking, release when done |
+| **Push to Toggle** | Press once to start listening, press again to stop |
 
----
+Click **Record** to assign your key or button for Hold-to-talk or Push to Toggle.
 
-## Step 5 — Configure Your Settings
+### Steam Import (optional)
 
-### Push to Talk
-VERA uses **Hold mode** — hold your assigned key or mouse button while speaking and release when done. A beep will signal when VERA is ready to listen.
+Click **Import Steam Apps** to add your entire Steam library so you can open games by voice.
 
-Click **Record** to assign your key or button.
+### Desktop Shortcut (optional)
 
-### AI Assistant (optional)
-If you want to use the **"ask \<question\>"** command, you'll need an API key. See the [AI Setup Guide](ai-setup.md) for details.
-
----
-
-## Step 6 — Import Your Steam Library (optional)
-
-Click **Import Steam Apps** to automatically add all your Steam games to VERA. Once imported you can open any game by saying **"open \<game name\>"**.
-
-> This scans your Steam installation automatically — no manual entry needed.
+Check **Create desktop shortcut** to put VERA on your desktop.
 
 ---
 
-## Step 7 — Desktop Shortcut
+## Step 4 — Finish
 
-Make sure **Create desktop shortcut** is checked before finishing. This puts an VERA shortcut on your desktop that you can also pin to your taskbar or Start menu.
+Click **Finish**. VERA launches and starts listening in the background — look for the icon in your system tray.
+
+Say **"what can I say"** to see a full list of available commands.
 
 ---
 
-## Step 8 — Finish
+## Running from Source
 
-Click **Finish**. VERA will start running in the background — look for the VERA icon in your system tray.
-
-You're ready to go. Say **"what can I say"** at any time to see a full list of available commands.
+If you're running VERA from source instead of the installer, use `setup_installer.cmd` to install dependencies manually, then `run_ipa.cmd` to launch.
 
 ---
 
 ## Updating VERA
 
-VERA does not automatically notify you of updates. To check manually, open the VERA UI and click **Check for Updates** — it will compare your version against the latest release and prompt you to update if one is available.
+Open the VERA UI and click **Check for Updates** in Settings → Utilities. VERA will compare your version against the latest release and prompt you if an update is available.
 
-Your settings and data are preserved during updates.
+Your settings, memory, and macros are preserved during updates.
 
 ---
 
 ## Uninstalling VERA
 
-Run **`uninstall.cmd`** in the VERA folder. You'll be asked if you want to remove your settings and language model as well. Choosing **Y** does a full clean wipe. Choosing **N** keeps your data in case you reinstall later.
+Use **Add/Remove Programs** in Windows Settings, or run `uninstall.cmd` in the VERA folder. Your `config.json` and `memory.json` are left behind so your settings are preserved if you reinstall.

@@ -30,7 +30,7 @@ VERA automatically detects which provider to use based on your API key — no ex
 2. Sign up for a free account
 3. Navigate to **API Keys** in the left sidebar
 4. Click **Create API Key** and copy it
-5. Open the VERA UI → **Settings** tab → paste your key into the **API Key** field
+5. Open the VERA UI → **Integrations** tab → paste your key into the **API Key** field
 6. Click **Save**
 
 That's it. Say **"ask what is the weather today"** to test it.
@@ -43,7 +43,7 @@ That's it. Say **"ask what is the weather today"** to test it.
 2. Sign up and add a payment method
 3. Navigate to **API Keys** and create a new key
 4. Copy the key — it will start with `sk-ant-`
-5. Open the VERA UI → **Settings** tab → paste your key into the **API Key** field
+5. Open the VERA UI → **Integrations** tab → paste your key into the **API Key** field
 6. Click **Save**
 
 ---
@@ -54,7 +54,7 @@ That's it. Say **"ask what is the weather today"** to test it.
 2. Sign up and add a payment method
 3. Navigate to **API Keys** and create a new key
 4. Copy the key — it will start with `sk-`
-5. Open the VERA UI → **Settings** tab → paste your key into the **API Key** field
+5. Open the VERA UI → **Integrations** tab → paste your key into the **API Key** field
 6. Click **Save**
 
 ---

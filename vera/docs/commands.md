@@ -54,7 +54,6 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 | `play` / `pause` | Play or pause current track |
 | `skip` / `next` | Skip to next track |
 | `back` / `previous` | Go to previous track |
-| `sound on` / `sound off` | Unmute / mute |
 
 > **Example:** "spotify play eye of the tiger"
 
@@ -64,14 +63,44 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 
 | What to say | What happens |
 |---|---|
-| `mute` / `mute audio` / `sound off` | Mutes system volume |
-| `unmute` / `sound on` / `audio on` | Restores volume to previous level |
-| `volume up` | Increases volume by 10% |
-| `volume down` | Decreases volume by 10% |
-| `set volume <number>` | Sets volume to a specific level (0–100) |
-| `set volume max` | Sets volume to 100% |
+| `volume up` | Increases system volume by 10% |
+| `volume down` | Decreases system volume by 10% |
+| `set volume <number>` | Sets system volume to a specific level (0–100) |
+| `set volume max` | Sets system volume to 100% |
 
-> **Examples:** "mute", "set volume 50", "volume up"
+---
+
+## Muting VERA
+
+| What to say | What happens |
+|---|---|
+| `mute` / `be quiet` | VERA stops responding to commands until unmuted |
+| `unmute` / `okay vera` | VERA resumes responding |
+
+> This mutes VERA's responses — it does not affect your system volume.
+
+---
+
+## Weather & Date
+
+| What to say | What happens |
+|---|---|
+| `weather in <city>` | Reads the current weather for that city |
+| `what's the weather in <city>` | Same as above |
+| `what's the date` / `what day is it` | Reads the current date |
+
+> **Example:** "weather in new york", "what's the date"
+
+---
+
+## News
+
+| What to say | What happens |
+|---|---|
+| `give me the news` | Reads top headlines from your selected news source |
+| `news briefing` | Same as above |
+
+> News source is configurable in Settings.
 
 ---
 
@@ -88,30 +117,30 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 
 ---
 
+## Reminders
+
+| What to say | What happens |
+|---|---|
+| `remind me to <thing> at <time>` | Sets a reminder |
+| `remind me at <time> to <thing>` | Same as above |
+| `what are my reminders` | Lists all upcoming reminders |
+| `cancel all reminders` | Removes all reminders |
+
+> **Examples:** "remind me to take my meds at 9pm", "what are my reminders"
+
+---
+
 ## Notes
 
 | What to say | What happens |
 |---|---|
 | `note <text>` | Saves a note |
-| `open notes` | Opens your notes |
+| `open notes` | Opens your notes file |
 | `list notes` / `show notes` | Reads your notes aloud |
 | `delete last note` | Deletes the most recent note |
 | `clear all notes` | Deletes all notes |
 
 > **Example:** "note pick up milk on the way home"
-
----
-
-## Clipboard
-
-| What to say | What happens |
-|---|---|
-| `read clipboard` | Reads your clipboard aloud |
-| `copy <text>` | Copies text to clipboard |
-| `paste clipboard` / `paste that` / `paste it` | Pastes clipboard contents |
-| `clear clipboard` | Clears the clipboard |
-
-> **Examples:** "copy hello world", "read clipboard", "paste that"
 
 ---
 
@@ -121,15 +150,35 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 |---|---|
 | `type <text>` | Types the text as keyboard input |
 | `send message <text>` | Types the text and presses Enter |
-| `read out <text>` | Reads the text aloud via text-to-speech |
+| `read out <text>` | Reads the text aloud via TTS |
 | `sleep computer` | Puts your PC to sleep |
 | `restart computer` | Restarts your PC after a 5 second delay |
 | `shut down computer` | Shuts down your PC after a 5 second delay |
 | `restart assistant` | Restarts VERA |
 
-> **Important:** For `type` and `send message` to work, you must have your cursor clicked into a text field first — VERA types into whatever is currently focused on screen.
->
-> **Examples:** "type hello world", "send message on my way", "shut down computer"
+> **Important:** For `type` and `send message` to work, your cursor must be in a text field — VERA types into whatever is currently focused.
+
+---
+
+## Gaming Mode
+
+| What to say | What happens |
+|---|---|
+| `start gaming mode` | Strips responses to ultra-short, silences idle chatter, suppresses unrecognized command feedback |
+| `stop gaming mode` | Returns VERA to normal behavior |
+
+> **"Gaming Mode"** appears in the status bar while active.
+
+---
+
+## Game Overlay
+
+| What to say | What happens |
+|---|---|
+| `show overlay` | Shows the transparent always-on-top bar with your last 3 voice exchanges |
+| `hide overlay` | Hides the overlay |
+
+> Position and hotkey are configurable in Settings → Game Overlay.
 
 ---
 
@@ -144,9 +193,7 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 | `discord delete <channel>` | Deletes the last message sent to a channel |
 | `discord purge <channel> <n>` | Bulk deletes up to 100 messages |
 
-> Requires Discord webhook setup in the VERA settings. See the [Discord Setup Guide](discord.md) for details.
->
-> **Note:** To create a webhook you must have **Administrator** or **Manage Webhooks** permission in the Discord server.
+> Requires Discord webhook setup in the Discord tab. See the [Discord Setup Guide](discord.md) for details.
 
 ---
 
@@ -156,7 +203,7 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 |---|---|
 | `ask <question>` | Sends your question to the AI and reads the answer aloud |
 
-> Requires an API key. See the [AI Setup Guide](ai-setup.md) for details.
+> Requires an API key in the Integrations tab. See the [AI Setup Guide](ai-setup.md) for details.
 >
 > **Example:** "ask what is the capital of France"
 
@@ -176,23 +223,21 @@ A full list of everything you can say to VERA. Say **"what can I say"** at any t
 
 ---
 
-## Aliases
+## Key Binds
 
-| What to say | What happens |
-|---|---|
-| `add alias <name> for <app>` | Creates a voice shortcut for an app |
+Custom phrases mapped to keypresses — configured in the **Integrations** tab.
 
-> **Example:** "add alias music for spotify" — after this you can say "open music" to open Spotify.
+> **Example:** Bind "reload" to R so saying "reload" presses R in-game.
 >
-> Restart VERA after adding an alias for it to take effect.
+> ⚠ May be flagged by EAC/BattlEye anti-cheat. See the [Key Binds Guide](keybinds.md).
 
 ---
 
-## Key Binds
+## Command Macros (Premium)
 
-Custom phrases mapped to keypresses — configured in the **Actions** tab of the VERA UI.
+Chain multiple commands into one phrase — configured in the **Integrations** tab.
 
-> **Example:** You could bind "push to talk" to your in-game PTT key so VERA triggers it on command.
+> **Example:** Say "good morning" → VERA opens Spotify, reads the weather, and checks your reminders — each step waits for VERA to finish speaking before the next begins.
 
 ---
 
@@ -202,7 +247,7 @@ Custom phrases mapped to keypresses — configured in the **Actions** tab of the
 |---|---|
 | `I'm tired` / `I'm stressed` / `I'm happy` | VERA responds to your mood |
 | `I'm playing <game>` | Sets your activity so VERA is context-aware |
-| `tell me a joke` / `joke` | VERA tells you a joke |
+| `tell me a joke` | VERA tells you a joke |
 
 ---
 

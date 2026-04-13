@@ -1,129 +1,88 @@
 # VERA Assistant
 
-Offline personal assistant for Windows using Vosk (speech to text).
+Voice-controlled personal assistant for Windows.
 
 ## Quick Start
 
-1. Install Python 3.10+ (standalone installer):
-   https://www.python.org/downloads/
-   - Make sure to check **"Add Python to PATH"** during install
-2. Double-click `setup.cmd` to install dependencies (one-time)
-3. Double-click `run_ipa.vbs` (no terminal)
-4. The first-run wizard will open:
-   - Choose **Language** (English or Spanish)
-   - Choose **Mode** (Hold-to-talk, Hotkey, or Timed)
-   - If you don't have a model yet, click **Download English/Spanish Model**
-   - Optional: **Import Steam Apps**
+1. Download the latest `VERA_Setup_x.x.x.exe` from the [releases page](https://github.com/copenhagenay-spec/Vera-beta/releases)
+2. Run the installer — it handles Python packages, espeak-ng, and voice model files automatically
+3. The setup wizard opens on first launch:
+   - Choose your **listening mode** (Wake Word, Hold-to-talk, or Push to Toggle)
+   - Optionally import your Steam library and create a desktop shortcut
    - Click **Finish**
 
-VERA will start listening in the background after the wizard finishes.
+VERA starts listening in the background after the wizard completes.
 
 ## Troubleshooting
 
-- If the app doesn't open, run `run_ipa.cmd` to see errors in the terminal.
-- If nothing is transcribed, check Windows microphone permissions and input device.
-- If hotkey/hold doesn't work, make sure dependencies are installed and restart VERA.
-- Crash logs are saved to `data/logs/assistant.log`.
+- If the app doesn't open, run `run_ipa.cmd` to see errors in the terminal
+- If nothing is transcribed, check Windows microphone permissions and your input device
+- Crash logs are saved to `data/logs/assistant.log`
+- Use the **Bug Report** button in the UI to zip and submit logs automatically
 
 ## Uninstall
 
-Double-click:
-`uninstall.cmd`
-
-This removes the `data` folder (model, logs, settings). To fully remove VERA,
-delete the VERA folder.
+Run the uninstaller from Add/Remove Programs, or double-click `uninstall.cmd` in the VERA folder.
 
 ## Files
 
-- `data/model` holds the Vosk models
-- `data/model/en` English model
-- `data/model/es` Spanish model (if installed)
-- `data/assets` holds icons
-- `data/logs` holds crash logs
-- `data/config.json` holds your settings
+- `data/models/` — voice model files (kokoro TTS, faster-whisper STT)
+- `data/assets/` — icons and UI assets
+- `data/logs/` — crash and event logs
+- `data/config.json` — your settings (preserved on reinstall)
+- `data/memory.json` — things VERA remembers about you (preserved on reinstall)
+- `data/macros.json` — command macros (preserved on reinstall)
 
 ## Features
 
-- Help: say `what can I say` to show all available voice commands
-- Open apps: say `open <app>`
-- App aliases: say an alias to open a target app
-- Custom actions: phrase -> command
-- Web search: say `search for <query>`
-- YouTube: open, search, play/pause/next/back
-- Spotify media controls: `play`, `pause`, `skip`, `back`
-- Timers: say `set a timer 5 minutes`
-- Notes: `note ...`, `open notes`, `delete last note`, `clear all notes`
-- Sleep PC: `sleep computer`
-- Restart VERA: `restart assistant`
-- Type text: `type <text>` (simulates keyboard input)
-- Send message: `send message <text>` — types text and presses Enter to send
-- System audio mute/unmute: `sound on`, `sound off`
-- Text-to-speech: `read out <text>` (offline TTS via pyttsx3)
-- AI query: `ask <question>` — spoken answer powered by Groq (free, see **AI Setup** below)
-- Key binds: map a spoken phrase to a keypress (e.g. say "reload" → presses R); configured in the Actions tab. ⚠ Blocked by EAC/BattlEye anti-cheat in protected games.
-- Discord: `discord <channel> <message>` — posts to a webhook channel; `read discord <channel>` — reads last message aloud
-- Discord setup: add Bot Token + Server ID + per-channel webhook URLs in the Apps tab
-- Mouse side buttons supported as push-to-talk key (record via Hold key button)
-- Tray controls: show/hide/start/stop/restart/exit
-- Bug report button (zips log + settings)
-- Check for updates (downloads latest from GitHub)
-- English and Spanish recognition (per-language models)
-
-## Steam Import
-
-Use the **Import Steam** button in the Apps section to auto-add games
-from your Steam library as voice commands.
-
-## Models
-
-Place models in:
-
-```
-data/model/en/<model-folder>
-data/model/es/<model-folder>
-```
-
-Small English model example:
-`vosk-model-small-en-us-0.15`
-
-Small Spanish model example:
-`vosk-model-small-es-0.42`
+- **Help:** say `what can I say` to show available voice commands
+- **Open apps:** say `open <app>` or `close <app>`
+- **App aliases:** create shortcut names for apps
+- **Custom actions:** map a phrase to any shell command (Integrations tab)
+- **Key binds:** map a phrase to a keypress or key sequence (Integrations tab)
+- **Command macros:** chain multiple commands into one phrase (Integrations tab, Premium)
+- **Web search:** say `search for <query>`
+- **Weather:** say `weather in <city>`
+- **Date:** say `what's the date` or `what day is it`
+- **News:** say `give me the news`
+- **Timers:** say `set a timer 5 minutes`
+- **Reminders:** say `remind me to <thing> at <time>`
+- **Notes:** `note <text>`, `open notes`, `list notes`
+- **Memory:** `my name is <name>`, `remember <fact>`, `what do you know about me`
+- **Spotify:** `play`, `pause`, `skip`, `back`; or `spotify <query>` to search
+- **Volume:** `volume up`, `volume down`, `set volume 50`
+- **System:** `sleep computer`, `restart computer`, `shut down computer`
+- **Type/send:** `type <text>`, `send message <text>`
+- **TTS:** `read out <text>`
+- **Mute VERA:** `mute` / `be quiet` / `unmute`
+- **Gaming mode:** `start gaming mode` — strips responses to ultra-short, silences idle chatter
+- **Game overlay:** transparent always-on-top bar showing last 3 voice exchanges
+- **AI query:** `ask <question>` — spoken answer via Groq, Claude, or OpenAI (see AI Setup)
+- **Discord:** send messages, read channels, delete/purge via webhook
+- **Personalities:** Default, Professional, Jarvis (free); Offensive (Premium)
+- **Idle chatter:** VERA speaks unprompted after inactivity (toggle in Settings)
+- **Mishear training:** correct misheard transcripts in the Training tab
+- **Tray controls:** show/hide, start/stop, restart, exit
+- **Check for updates** — compares version against latest release
+- **Bug report** — zips logs and submits automatically to Discord
 
 ## AI Setup
 
-The `ask <question>` command supports two providers — VERA detects which one to use automatically based on your key.
+The `ask <question>` command supports three providers — VERA detects which to use from your key prefix.
 
-### Option 1 — Groq (free, recommended)
+### Groq (free, recommended)
 
-No credit card needed. 14,400 requests/day on the free tier.
-
-1. Go to **console.groq.com** and sign in
+1. Go to [console.groq.com](https://console.groq.com) and sign in
 2. Navigate to **API Keys** → **Create API Key**
 3. Copy the key (starts with `gsk_`)
-4. In VERA → **Apps tab** → paste it into the **AI API Key** field → **Save Config**
+4. In VERA → **Integrations tab** → paste it into the **API Key** field → **Save**
 
-### Option 2 — OpenAI (paid)
+### Claude / Anthropic (paid)
 
-If you already have an OpenAI API key, VERA will use it automatically — no extra setup needed.
+Paste your `sk-ant-` key into the same **API Key** field. VERA uses Claude Haiku automatically.
 
-1. In VERA → **Apps tab** → paste your OpenAI key (starts with `sk-`) into the **AI API Key** field → **Save Config**
+### OpenAI (paid)
 
-VERA will use **gpt-4o-mini** which is OpenAI's cheapest model. Typical voice queries cost a fraction of a cent each.
+Paste your `sk-` key into the **API Key** field. VERA uses gpt-4o-mini.
 
-### Option 3 — Claude / Anthropic (paid)
-
-If you have an Anthropic API key, VERA will detect it automatically.
-
-1. In VERA → **Apps tab** → paste your Anthropic key (starts with `sk-ant-`) into the **AI API Key** field → **Save Config**
-
-VERA will use **Claude Haiku**, Anthropic's fastest and most affordable model.
-
-Say `ask what's the weather like on Mars` to test whichever key you set up.
-
-> **Note:** AI responses are based on training data and may not reflect recent events, releases, or news.
-
-## Tips
-
-- If audio isn't detected, check Windows microphone permissions.
-- If a command doesn't trigger, check **Last Transcript** for misheard words and add aliases.
-- You can use **Delete Cache** in the UI if you ever want to remove Python `__pycache__` folders.
+> **Note:** AI responses reflect the provider's training data and may not include very recent events.
