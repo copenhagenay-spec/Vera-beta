@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.97.8
+- Added: weather shown on game overlay — say "weather in <city>" with the overlay visible to see current conditions pinned at the top in amber (city, temp, description on line 1; high/low/rain chance on line 2)
+- Improved: game overlay rebuilt with Qt layout system — cleaner rendering, better visual hierarchy, separator between weather and exchanges, foundation for future pinnable widget cards
+
 ## 0.97.7.1
 - Fixed: "close this" command could hang VERA indefinitely if the target process was in a protected or unresponsive state; taskkill now has a 5-second timeout and VERA stays responsive regardless of the result
 

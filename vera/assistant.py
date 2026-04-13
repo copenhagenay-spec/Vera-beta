@@ -833,6 +833,7 @@ def main() -> None:
             "personality_mode": personality_mode.get(),
             "overlay_position": overlay_position.get(),
             "overlay_hotkey": overlay_hotkey.get(),
+            "overlay_widgets": cfg.get("overlay_widgets", {}),
             "joy_ptt_button": joy_ptt_button.get(),
             "font_scale": font_scale.get(),
             "premium": bool(premium.get()),
@@ -2820,6 +2821,9 @@ def main() -> None:
     # Wire overlay show/hide callbacks for voice commands
     _skills_mod._overlay_callbacks["show"] = lambda: _bridge.post(_game_overlay.show)
     _skills_mod._overlay_callbacks["hide"] = lambda: _bridge.post(_game_overlay.hide)
+
+    # Wire weather update callback
+    _skills_mod._weather_callbacks["update"] = lambda t: _bridge.post(lambda _t=t: _game_overlay.set_weather(_t))
 
     # Overlay hotkey listener
     _overlay_hk_listener: list = [None]

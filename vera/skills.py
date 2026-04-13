@@ -1848,6 +1848,8 @@ def _ih_gaming_mode_off(m, t, allow_prompt, confirm_fn, restart_fn):
 
 # --- Game Overlay ---
 _overlay_callbacks: dict = {"show": None, "hide": None}
+_weather_callbacks: dict = {"update": None}
+_overlay_widgets:   dict = {}   # name → OverlayWidget; populated by assistant.py at startup
 
 
 @_intent(992, r"^(show|open|enable|turn on)\s+(the\s+)?(game\s+)?overlay$")
@@ -3034,6 +3036,17 @@ def _ih_weather(m, t, allow_prompt, confirm_fn, restart_fn):
         feels_f = cur["FeelsLikeF"]
         humidity = cur["humidity"]
 
+        today = data.get("weather", [{}])[0]
+        high_f = today.get("maxtempF", "?")
+        low_f = today.get("mintempF", "?")
+        hourly = today.get("hourly", [])
+        precip = max((int(h.get("chanceofrain", 0)) for h in hourly), default=0)
+
+        line1 = f"{city.title()} · {temp_f}°F · {desc}"
+        line2 = f"H: {high_f}°F  L: {low_f}°F · Rain: {precip}%"
+        fn = _weather_callbacks.get("update")
+        if fn:
+            fn(f"{line1}\n{line2}")
         _tts_speak(
             f"Weather in {city}: {desc}, {temp_f} degrees, feels like {feels_f}, humidity {humidity} percent."
         )
