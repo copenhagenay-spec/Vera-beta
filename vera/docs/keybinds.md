@@ -63,7 +63,7 @@ The side buttons on your mouse can be recorded as steps:
 **"VERA says the phrase but nothing happens"**
 - The game may be blocking synthetic input (anti-cheat)
 - Make sure the game window is focused when the bind fires
-- Re-record the key bind — old binds recorded before v0.85.2 may need to be re-recorded
+- Re-record the key bind using the **+ Step** button
 
 **"The wrong key is being pressed"**
 - Delete the bind and re-record it using the **+ Step** button

@@ -54,13 +54,16 @@ To enable the **read discord** command you'll need your Server ID and Channel ID
 ## Step 3 — Configure VERA
 
 1. Open the VERA UI
-2. Go to the **Settings** tab
-3. Fill in the following fields:
-   - **Discord Webhook URL** — the webhook URL you copied in Step 1
-   - **Server ID** — your Discord server ID
+2. Go to the **Discord** tab
+3. Under **Channels**, fill in:
+   - **Channel name** — what you'll say in the voice command (e.g. "general")
+   - **Server nickname** — optional, used for multi-server targeting
+   - **Webhook URL** — the webhook URL you copied in Step 1
+   - Click **Add Channel**
+4. Under **Bot Credentials**, fill in:
    - **Bot Token** — required for reading messages (see below)
-   - Channel names are used directly in the voice command — no ID needed
-4. Click **Save**
+   - **Server ID** — your Discord server ID
+5. Click **Save**
 
 ---
 

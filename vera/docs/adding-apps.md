@@ -76,7 +76,7 @@ If an app name is hard to say, too long, or keeps getting misheard, you can crea
 > - "add alias music for spotify"
 > - "add alias browser for opera gx"
 
-After adding an alias, **restart VERA** for it to take effect. You can then say **"open \<your shortcut\>"** to launch the app.
+You can then say **"open \<your shortcut\>"** to launch the app — no restart needed.
 
 ---
 

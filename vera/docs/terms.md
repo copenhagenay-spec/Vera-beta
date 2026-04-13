@@ -24,8 +24,9 @@ Cope (the developer) does not collect, transmit, or have access to any of the ab
 
 ### 4.3 Third Party Services
 Certain optional features send data to third party services:
-- **Gemini AI (Google)** — if you provide a Gemini API key, voice queries are sent to Google's servers under Google's Privacy Policy
 - **Groq** — if you provide a Groq API key, voice queries are sent to Groq's servers under Groq's Privacy Policy
+- **Anthropic** — if you provide an Anthropic API key, voice queries are sent to Anthropic's servers under Anthropic's Privacy Policy
+- **OpenAI** — if you provide an OpenAI API key, voice queries are sent to OpenAI's servers under OpenAI's Privacy Policy
 - **Discord** — if you configure Discord webhooks, messages are sent to Discord under Discord's Privacy Policy
 
 You are responsible for reviewing the privacy policies of any third party services you choose to connect.
@@ -49,13 +50,20 @@ TO THE FULLEST EXTENT PERMITTED BY LAW, THE DEVELOPER SHALL NOT BE LIABLE FOR AN
 
 ## 9. THIRD PARTY LICENSES
 VERA uses the following open source libraries:
+- PySide6 (LGPL-3.0)
 - pynput (LGPL-3.0)
 - pystray (LGPL-3.0)
 - faster-whisper (MIT)
-- customtkinter (MIT)
+- sounddevice (MIT)
+- soundfile (BSD 3-Clause)
+- pillow (HPND)
+- pyttsx3 (MIT)
+- pycaw (MIT)
+- pypresence (MIT)
 - kokoro-onnx (Apache 2.0)
+- requests (Apache 2.0)
 
-Source code is provided, satisfying the requirements of LGPL-3.0. Full license texts are available at their respective project pages.
+Source code is provided, satisfying the requirements of LGPL-3.0. Full license texts are available in THIRD-PARTY-LICENSES.md and at their respective project pages.
 
 ## 10. CHANGES TO TERMS
 The developer reserves the right to update these Terms at any time. Continued use of VERA after changes are posted constitutes acceptance of the new Terms.
