@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.97.8.4
+- Fixed: "Downloading update..." status now shows immediately after confirming so it's clear the update is in progress
+- Fixed: update error messages now display correctly if the download fails
+
 ## 0.97.8.3
 - Fixed: clicking "Check Updates" no longer freezes VERA — update check and download now run in the background
 

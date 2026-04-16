@@ -993,6 +993,7 @@ def main() -> None:
             def _confirm_and_install():
                 if not _confirm_dialog("Update Available", f"Update to v{latest}?"):
                     return
+                _bridge.post(lambda: _show_ui_info("Update", "Downloading update... VERA will restart when ready."))
                 def _do_install():
                     try:
                         base_dir = os.path.dirname(__file__)
@@ -1026,7 +1027,8 @@ def main() -> None:
                         subprocess.Popen([sys.executable, script_path])
                         os._exit(0)
                     except Exception as exc:
-                        _bridge.post(lambda: _notify_error("Update Failed", str(exc)))
+                        err_msg = str(exc)
+                        _bridge.post(lambda m=err_msg: _notify_error("Update Failed", m))
                 threading.Thread(target=_do_install, daemon=True).start()
 
             _bridge.post(_confirm_and_install)
