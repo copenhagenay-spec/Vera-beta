@@ -810,6 +810,34 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     gaming_row_l.addWidget(gaming_mode_chk)
     gaming_row_l.addWidget(gaming_desc, 1)
     pers_vl.addWidget(gaming_row)
+
+    # Custom wake phrase (premium)
+    from config import load_config as _load_cfg
+    _cfg_wake = _load_cfg().get("custom_wake_phrase", "")
+    wake_lbl = QLabel("Custom wake phrase")
+    wake_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    wake_entry = QLineEdit()
+    wake_entry.setFixedWidth(140)
+    wake_entry.setPlaceholderText("e.g. friday")
+    wake_entry.setText(_cfg_wake)
+    wake_entry.setEnabled(_premium)
+    wake_save = QPushButton("Save")
+    wake_save.setFixedWidth(60)
+    wake_save.setEnabled(_premium)
+    if _premium:
+        wake_save.clicked.connect(lambda: callbacks["set_custom_wake_phrase"](wake_entry.text()))
+    wake_row = QWidget()
+    wake_row_l = QHBoxLayout(wake_row)
+    wake_row_l.setContentsMargins(0, 4, 0, 0)
+    wake_row_l.setSpacing(8)
+    wake_row_l.addWidget(wake_lbl)
+    wake_row_l.addWidget(wake_entry)
+    wake_row_l.addWidget(wake_save)
+    if not _premium:
+        wake_row_l.addWidget(_hint_label("  Premium feature"))
+    wake_row_l.addStretch()
+    pers_vl.addWidget(wake_row)
+
     settings_vl.addWidget(pers_card)
 
     # Game Overlay

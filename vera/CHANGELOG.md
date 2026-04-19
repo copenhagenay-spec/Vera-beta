@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.98
+- Added: Fuzzy intent routing — VERA now catches misheard commands that slip past exact matching; high-confidence mishears fire silently, mid-confidence triggers a "Did you mean X?" confirmation; confirmed matches auto-log to mishear training
+- Added: Custom wake phrase (Premium) — set your own trigger word alongside "vera" in Settings → Personality; updates live without restart
+- Added: First-launch onboarding card — new users see a prompt to try "show help" or "what can I say"; dismissed permanently with "Got it"
+
 ## 0.97.8.4
 - Fixed: "Downloading update..." status now shows immediately after confirming so it's clear the update is in progress
 - Fixed: update error messages now display correctly if the download fails

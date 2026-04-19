@@ -501,7 +501,7 @@ def _parse_timer(text: str):
 
 def _media_key(action: str) -> bool:
     try:
-        from input_wrapper import keyboard  # type: ignore
+        from pynput import keyboard  # type: ignore
     except Exception:
         print("Missing dependency: pynput (needed for media keys).")
         return False
@@ -1304,9 +1304,9 @@ def _resolve_key(raw: str):
     if raw.startswith("<") and raw.endswith(">"):
         raw = raw[1:-1].strip()
     if raw in ("x1", "x2"):
-        from input_wrapper import mouse as _mouse  # type: ignore
+        from pynput import mouse as _mouse  # type: ignore
         return ("mouse", _mouse.Button.x1 if raw == "x1" else _mouse.Button.x2)
-    from input_wrapper import keyboard  # type: ignore
+    from pynput import keyboard  # type: ignore
     if raw in _NUMPAD_VK:
         return ("key", keyboard.KeyCode.from_vk(_NUMPAD_VK[raw]))
     if len(raw) == 1:
@@ -1323,8 +1323,8 @@ _MODIFIER_NAMES = {"ctrl", "alt", "shift", "cmd"}
 def _press_key(key: str, count: int = 1) -> bool:
     """Press a single key or combo (e.g. 'alt+n', 'ctrl+shift+f', 'x1')."""
     try:
-        from input_wrapper import keyboard as _kb  # type: ignore
-        from input_wrapper import mouse as _mouse  # type: ignore
+        from pynput import keyboard as _kb  # type: ignore
+        from pynput import mouse as _mouse  # type: ignore
 
         parts = [p.strip().lower() for p in key.split("+")]
         modifiers = []
@@ -1384,7 +1384,7 @@ def _run_macro(sequence: str, count: int = 1) -> bool:
 
 def _send_message(text: str) -> bool:
     try:
-        from input_wrapper import KbController as Controller, Key  # type: ignore
+        from pynput import KbController as Controller, Key  # type: ignore
         time.sleep(0.3)
         ctl = Controller()
         ctl.type(text)
@@ -1400,7 +1400,7 @@ def _send_message(text: str) -> bool:
 
 def _type_text(text: str) -> bool:
     try:
-        from input_wrapper import KbController as Controller  # type: ignore
+        from pynput import KbController as Controller  # type: ignore
         time.sleep(0.3)
         Controller().type(text)
         _log_event(f"TYPE_TEXT: {text}")
@@ -2773,7 +2773,7 @@ def _ih_clipboard_clear(m, t, allow_prompt, confirm_fn, restart_fn):
 def _ih_clipboard_paste(m, t, allow_prompt, confirm_fn, restart_fn):
     try:
         import time as _time
-        from input_wrapper import KbController as _KbCtrl, Key as _Key
+        from pynput import KbController as _KbCtrl, Key as _Key
         _vera_confirm("default")
         _time.sleep(0.5)  # let focus return to target window before keystroke
         _kb = _KbCtrl()
@@ -3073,19 +3073,91 @@ def _ih_weather(m, t, allow_prompt, confirm_fn, restart_fn):
 _INTENT_REGISTRY.sort(key=lambda x: -x[0])
 
 
+# ---------------------------------------------------------------------------
+# Fuzzy intent routing — catches mishears that slip past regex
+# ---------------------------------------------------------------------------
+_FUZZY_PHRASES: list = []   # [(phrase_str, handler_fn), ...]
+_FUZZY_PATTERNS: list = []  # compiled patterns, parallel to _FUZZY_PHRASES
+_fuzzy_pending: dict = {}   # {"phrase", "handler", "pattern", "original"}
+
+_FUZZY_YES = frozenset({"yes", "yeah", "yep", "yup", "correct", "sure", "do it", "go ahead", "confirmed"})
+
+
+def _build_fuzzy_index() -> None:
+    phrases_path = os.path.join(os.path.dirname(__file__), "data", "intent_phrases.json")
+    if not os.path.exists(phrases_path):
+        return
+    try:
+        with open(phrases_path, encoding="utf-8") as f:
+            phrase_map = json.load(f)
+    except Exception:
+        return
+    fn_lookup = {handler.__name__: (handler, pattern) for _, pattern, handler in _INTENT_REGISTRY}
+    for fn_name, phrases in phrase_map.items():
+        entry = fn_lookup.get(fn_name)
+        if not entry:
+            continue
+        handler, pattern = entry
+        for phrase in phrases:
+            if "<arg>" not in phrase and "<num>" not in phrase:
+                _FUZZY_PHRASES.append((phrase, handler))
+                _FUZZY_PATTERNS.append(pattern)
+
+
+_build_fuzzy_index()
+
+
+def _try_fuzzy_route(t: str, allow_prompt: bool, confirm_fn, restart_fn) -> bool:
+    """
+    Fuzzy-match t against canonical intent phrases after regex routing fails.
+    ≥85%: fires silently and logs to mishear training.
+    70–84%: speaks "Did you mean X?" and sets _fuzzy_pending.
+    Returns True if an intent was fired immediately.
+    """
+    global _fuzzy_pending
+    if not _FUZZY_PHRASES:
+        return False
+    try:
+        from rapidfuzz import process, fuzz
+    except ImportError:
+        return False
+
+    candidates = [p for p, _ in _FUZZY_PHRASES]
+    result = process.extractOne(t, candidates, scorer=fuzz.ratio)
+    if result is None:
+        return False
+
+    phrase, score, idx = result
+    handler = _FUZZY_PHRASES[idx][1]
+    pattern = _FUZZY_PATTERNS[idx]
+
+    if score >= 85:
+        m = pattern.search(phrase)
+        if handler(m, t, allow_prompt, confirm_fn, restart_fn):
+            save_user_mishear(t, phrase)
+            return True
+    elif score >= 70:
+        _fuzzy_pending.clear()
+        _fuzzy_pending.update({"phrase": phrase, "handler": handler, "pattern": pattern, "original": t})
+        _tts_speak(f"Did you mean {phrase}?")
+
+    return False
+
+
 def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, restart_fn=None) -> bool:
     """
     Clean the transcript through preprocess_transcript, then dispatch to the
     first registered intent handler whose pattern matches. Returns True if a
     handler claimed the transcript.
     """
+    from memory import get_session as _gs, set_session as _ss, increment_command_count as _inc_cmd
+
     _log_transcript(text)
     t = preprocess_transcript(text)
     if not t or t in _NOISE_WORDS:
         return False
 
     # Track repeat transcripts for conversational awareness
-    from memory import get_session as _gs, set_session as _ss, increment_command_count as _inc_cmd
     last_repeat = _gs("repeat_transcript")
     repeat_count = int(_gs("repeat_count") or 0)
     if last_repeat == t:
@@ -3094,12 +3166,31 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
         _ss("repeat_transcript", t)
         _ss("repeat_count", 0)
 
+    # Handle pending "did you mean?" confirmation
+    if _fuzzy_pending:
+        pending = dict(_fuzzy_pending)
+        _fuzzy_pending.clear()
+        if t in _FUZZY_YES or (t.split() and t.split()[0] in _FUZZY_YES):
+            m = pending["pattern"].search(pending["phrase"])
+            if pending["handler"](m, pending["original"], allow_prompt, confirm_fn, restart_fn):
+                save_user_mishear(pending["original"], pending["phrase"])
+                _inc_cmd()
+                return True
+        # Any other response (including "no") clears the pending intent silently
+
     for _priority, pattern, handler in _INTENT_REGISTRY:
         m = pattern.search(t)
         if m:
             if handler(m, t, allow_prompt, confirm_fn, restart_fn):
                 _inc_cmd()
                 return True
+
+    if not _gaming_mode["value"]:
+        if _try_fuzzy_route(t, allow_prompt, confirm_fn, restart_fn):
+            _inc_cmd()
+            return True
+        if _fuzzy_pending:
+            return False  # waiting for "did you mean?" reply on next utterance
 
     if not _gaming_mode["value"]:
         if handle_social(t, _tts_speak):

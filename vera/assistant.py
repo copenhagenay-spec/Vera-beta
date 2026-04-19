@@ -2181,6 +2181,13 @@ def main() -> None:
 
     # --- Wake Word ---
     _WAKE_PHRASES = {"vera"}
+    try:
+        from license import is_premium as _chk_prem
+        _custom_wake = load_config().get("custom_wake_phrase", "").strip().lower()
+        if _custom_wake and _chk_prem():
+            _WAKE_PHRASES.add(_custom_wake)
+    except Exception:
+        pass
     _wake_stop = threading.Event()
 
     def _wake_word_loop():
@@ -2270,6 +2277,17 @@ def main() -> None:
         if _wake_thread[0] is not None and _wake_thread[0].is_alive():
             _wake_thread[0].join(timeout=2.0)
         _wake_thread[0] = None
+
+    def _set_custom_wake_phrase(phrase: str) -> None:
+        phrase = phrase.strip().lower()
+        for p in list(_WAKE_PHRASES):
+            if p != "vera":
+                _WAKE_PHRASES.discard(p)
+        if phrase:
+            _WAKE_PHRASES.add(phrase)
+        cfg = load_config()
+        cfg["custom_wake_phrase"] = phrase
+        save_config(cfg)
 
     # --- Setup Wizard ---
     def _run_wizard():
@@ -2697,6 +2715,7 @@ def main() -> None:
         "remove_macro_step": _remove_macro_step,
         "add_macro": _add_macro,
         "remove_macro": _remove_macro,
+        "set_custom_wake_phrase": _set_custom_wake_phrase,
     }
 
     constants = {
@@ -2902,6 +2921,21 @@ def main() -> None:
                 _run_wizard()
             else:
                 _start_background()
+                if not cfg.get("onboarding_shown"):
+                    def _show_onboarding():
+                        def _dismiss_onboarding():
+                            _hide_inline_notice()
+                            c = load_config()
+                            c["onboarding_shown"] = True
+                            save_config(c)
+                        _show_inline_notice(
+                            'Try saying "show help" or "what can I say" to see everything VERA can do.',
+                            tone="info",
+                            duration_ms=0,
+                            action_text="Got it",
+                            action_callback=_dismiss_onboarding,
+                        )
+                    QTimer.singleShot(1500, _show_onboarding)
                 if idle_chatter.get():
                     def _do_startup_greeting():
                         import time as _t
