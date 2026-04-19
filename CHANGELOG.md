@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.97.9.1
+- Fixed: gaming mode now recognizes more natural phrasings — "gaming mode on", "turn gaming mode on", "gaming mode off", etc.
+- Added: Gaming mode toggle checkbox in Settings → Personality
+
 ## 0.97.9
 - Improved: updater now downloads and runs the silent installer instead of extracting a zip — faster, cleaner, and handles all dependencies automatically
 - Fixed: Discord Rich Presence timer now resets correctly when VERA restarts — no longer requires a PC reboot to refresh

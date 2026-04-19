@@ -785,6 +785,31 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     chatter_row_l.addWidget(chatter_chk)
     chatter_row_l.addWidget(chatter_desc, 1)
     pers_vl.addWidget(chatter_row)
+
+    gaming_mode_chk = QCheckBox("Gaming mode")
+    try:
+        from skills import _gaming_mode as _gm_ui
+        gaming_mode_chk.setChecked(bool(_gm_ui["value"]))
+    except Exception:
+        gaming_mode_chk.setChecked(False)
+    def _toggle_gaming_mode(v):
+        try:
+            from skills import _gaming_mode as _gm_ui2
+            _gm_ui2["value"] = bool(v)
+            fn = _gm_ui2.get("status_fn")
+            if fn:
+                fn(bool(v))
+        except Exception:
+            pass
+    gaming_mode_chk.stateChanged.connect(_toggle_gaming_mode)
+    gaming_desc = _hint_label("Ultra-short responses, no idle chatter, silent on mishears")
+    gaming_row = QWidget()
+    gaming_row_l = QHBoxLayout(gaming_row)
+    gaming_row_l.setContentsMargins(0, 4, 0, 0)
+    gaming_row_l.setSpacing(8)
+    gaming_row_l.addWidget(gaming_mode_chk)
+    gaming_row_l.addWidget(gaming_desc, 1)
+    pers_vl.addWidget(gaming_row)
     settings_vl.addWidget(pers_card)
 
     # Game Overlay
