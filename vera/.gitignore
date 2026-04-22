@@ -23,3 +23,4 @@ installer_stage/
 setup_installer.cmd
 setup.cmd
 run_ipa.vbs
+vera_setup.iss
