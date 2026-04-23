@@ -995,6 +995,7 @@ def _web_search(query: str, allow_prompt: bool, confirm_fn=None) -> bool:
         return True
     try:
         webbrowser.open(url)
+        _tts_speak(get_confirm("search"))
     except Exception as exc:
         print(f"Failed to open browser: {exc}")
     return True
@@ -2620,7 +2621,7 @@ def _ih_spotify(m, t, allow_prompt, confirm_fn, restart_fn):
     action = None
     if re.search(r"\b(play|pause|resume|stop)(\s+(song|track|music|video|vid))?\b", t):
         action = "play_pause"
-    elif re.search(r"\b(next|skip)(\s+(song|track))?\b", t):
+    elif re.search(r"^(next|skip)(\s+(song|track))?$|^(next|skip)\s+(song|track)|^(skip|next)\b", t) and not re.search(r"\b(is|was|are|the)\s+next\b", t):
         action = "next"
     elif re.search(r"\b(previous|back|rewind)(\s+(song|track))?\b", t):
         action = "previous"

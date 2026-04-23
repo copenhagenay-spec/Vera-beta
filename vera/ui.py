@@ -38,6 +38,14 @@ _PREM_BG           = "#141414"
 _PREM_TITLE_COLOR  = "#c9a84c"
 
 
+# Premium home tab themes — display name → filename in data/assets/
+# Drop a new image in data/assets/ and add an entry here to expose it as a theme.
+_PREMIUM_THEMES: dict[str, str] = {
+    "Particle Network": "backgroun.png",
+    "Emerald": "backgroun2.png",
+}
+
+
 def _apply_premium_theme() -> None:
     """Swap color constants and recompute style strings for premium tier."""
     global _ACCENT, _ACCENT_HOVER, _ACCENT_PRESS, _SURFACE, _BG, _TITLE_COLOR
@@ -211,12 +219,34 @@ def _make_entry(width=None, placeholder="", password=False) -> QLineEdit:
     return e
 
 
+from PySide6.QtCore import QEvent as _QEvent
+
+_scroll_blocker = None
+
+def _no_scroll(widget):
+    """Install scroll-block filter on a widget so scroll only works when focused."""
+    global _scroll_blocker
+    if _scroll_blocker is None:
+        from PySide6.QtCore import QObject as _QO
+        class _SB(_QO):
+            def eventFilter(self, obj, event):
+                if event.type() == _QEvent.Type.Wheel and not obj.hasFocus():
+                    event.ignore()
+                    return True
+                return False
+        _scroll_blocker = _SB()
+    widget.installEventFilter(_scroll_blocker)
+    widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    return widget
+
+
 def _make_combo(choices, width=None) -> QComboBox:
     c = QComboBox()
     c.addItems(choices)
     c.setStyleSheet(_COMBO_STYLE)
     if width:
         c.setFixedWidth(width)
+    _no_scroll(c)
     return c
 
 
@@ -297,7 +327,7 @@ def _section_label(text, help_text=None) -> tuple:
     spacer = QWidget()
     spacer.setFixedHeight(6)
     lbl = QLabel(text)
-    lbl.setStyleSheet("font-weight: bold; color: #ffffff; margin-top: 4px;")
+    lbl.setStyleSheet("font-weight: bold; color: #ffffff; margin-top: 4px; background: transparent;")
     lbl.setFont(_make_scalable_font(14, bold=True))
     _scalable_labels.append((lbl, 14, True))
     widgets = [spacer, lbl]
@@ -375,6 +405,9 @@ class _OverlayWidget(QWidget):
 
 def build_ui(window, state: dict, callbacks: dict, constants: dict):
     from license import is_premium
+    from config import load_config as _load_config_ui, save_config as _save_config_ui
+    cfg = _load_config_ui()
+
     if is_premium():
         _apply_premium_theme()
 
@@ -503,6 +536,38 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     home_area, home_inner, home_vl = _scrollable_tab()
     tabs.addTab(home_area, "Home")
 
+    _bg_lbl_ref = [None]  # mutable ref so theme switcher can update it
+
+    def _apply_home_theme(theme_name: str):
+        import os as _os_bg
+        filename = _PREMIUM_THEMES.get(theme_name, "")
+        if not filename:
+            if _bg_lbl_ref[0]:
+                _bg_lbl_ref[0].setVisible(False)
+            return
+        _bg_path = _os_bg.path.join(_os_bg.path.dirname(_os_bg.path.abspath(__file__)), "data", "assets", filename)
+        px = QPixmap(_bg_path)
+        if px.isNull():
+            return
+        if _bg_lbl_ref[0] is None:
+            lbl = QLabel(home_inner)
+            lbl.setScaledContents(True)
+            lbl.lower()
+            lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
+            _bg_lbl_ref[0] = lbl
+            _orig_resize = home_inner.resizeEvent
+            def _home_resize(event, _lbl=lbl):
+                _lbl.setGeometry(0, 0, home_inner.width(), home_inner.height())
+                _orig_resize(event)
+            home_inner.resizeEvent = _home_resize
+        _bg_lbl_ref[0].setPixmap(px)
+        _bg_lbl_ref[0].setVisible(True)
+        _bg_lbl_ref[0].setGeometry(0, 0, home_inner.width(), home_inner.height())
+
+    if is_premium():
+        _saved_theme = cfg.get("home_theme", "Particle Network")
+        _apply_home_theme(_saved_theme)
+
     # Premium watermarks
     if is_premium():
         _wm_row = QHBoxLayout()
@@ -530,7 +595,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
             home_vl.addWidget(logo_lbl)
     title_lbl = QLabel("V  E  R  A  +" if is_premium() else "V  E  R  A")
     title_lbl.setAlignment(Qt.AlignCenter)
-    title_lbl.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {_TITLE_COLOR};")
+    title_lbl.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {_TITLE_COLOR}; background: transparent;")
     home_vl.addWidget(title_lbl)
 
     # Controls section
@@ -579,23 +644,25 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     _update_controls()
     home_vl.addWidget(ctrl_card)
 
-    # Premium knob — floats below controls card, no card background
+    # Premium knob — centered in a full-width inset track bar
     knob_row = None
     if is_premium():
         import os as _os
         _knob_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data", "assets", "ptt_knob.png")
         _knob_px = QPixmap(_knob_path)
         if not _knob_px.isNull():
-            from PySide6.QtGui import QPainter, QTransform
+            from PySide6.QtGui import QPainter as _QPainter, QTransform as _QTransform
 
-            _knob_sized = _knob_px.scaled(90, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            _knob_size = 80
+            _knob_sized = _knob_px.scaled(_knob_size, _knob_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             def _make_knob_icon(angle: float) -> QIcon:
                 out = QPixmap(_knob_sized.size())
-                out.fill(QColor(_BG))
-                p = QPainter(out)
+                out.fill(Qt.transparent)
+                p = _QPainter(out)
+                p.setRenderHint(_QPainter.RenderHint.SmoothPixmapTransform)
                 cx, cy = _knob_sized.width() / 2, _knob_sized.height() / 2
-                t = QTransform()
+                t = _QTransform()
                 t.translate(cx, cy)
                 t.rotate(angle)
                 t.translate(-cx, -cy)
@@ -604,38 +671,56 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
                 p.end()
                 return QIcon(out)
 
-            # Angle pointing toward top label (Start), bottom label (Stop)
             knob_btn = QPushButton()
-            knob_btn.setFixedSize(90, 90)
+            knob_btn.setFixedSize(_knob_size, _knob_size)
+            knob_btn.setAttribute(Qt.WA_TranslucentBackground)
             knob_btn.setIcon(_make_knob_icon(0))
-            knob_btn.setIconSize(QSize(90, 90))
-            knob_btn.setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:pressed { margin: 2px; }")
-            knob_btn.setToolTip("Click to start / stop listening")
+            knob_btn.setIconSize(QSize(_knob_size, _knob_size))
+            knob_btn.setStyleSheet(
+                "QPushButton { background: transparent; border: none; border-radius: %dpx; }"
+                "QPushButton:pressed { margin: 2px; }" % (_knob_size // 2)
+            )
 
-            _knob_lbl = QLabel("Start Listening")
-            _knob_lbl.setStyleSheet(f"color: {_ACCENT}; font-size: 13px; font-weight: bold; background: transparent;")
+            # Side labels
+            _lbl_ss = (
+                "QPushButton {{ background: transparent; border: none;"
+                " color: {fg}; font-size: 11px; font-weight: bold; padding: 4px 8px; }}"
+                "QPushButton:hover {{ color: {hover}; }}"
+            )
+            _start_btn = QPushButton("Start\nListening")
+            _start_btn.setStyleSheet(_lbl_ss.format(fg="#888888", hover=_ACCENT))
+            _start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _start_btn.setFixedWidth(80)
 
-            _knob_active = [False]
-            def _knob_clicked():
-                if _knob_active[0]:
-                    _stop_background()
-                    _knob_lbl.setText("Start Listening")
-                    _knob_lbl.setStyleSheet(f"color: {_ACCENT}; font-size: 13px; font-weight: bold; background: transparent;")
-                    _knob_active[0] = False
-                else:
-                    _start_background()
-                    _knob_lbl.setText("Stop Listening")
-                    _knob_lbl.setStyleSheet("color: #c0392b; font-size: 13px; font-weight: bold; background: transparent;")
-                    _knob_active[0] = True
-            knob_btn.clicked.connect(_knob_clicked)
+            _stop_btn = QPushButton("Stop\nListening")
+            _stop_btn.setStyleSheet(_lbl_ss.format(fg="#888888", hover="#c0392b"))
+            _stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _stop_btn.setFixedWidth(80)
+
+            def _on_start():
+                _start_background()
+                knob_btn.setIcon(_make_knob_icon(-120))
+                _start_btn.setStyleSheet(_lbl_ss.format(fg=_ACCENT, hover=_ACCENT))
+                _stop_btn.setStyleSheet(_lbl_ss.format(fg="#888888", hover="#c0392b"))
+
+            def _on_stop():
+                _stop_background()
+                knob_btn.setIcon(_make_knob_icon(60))
+                _stop_btn.setStyleSheet(_lbl_ss.format(fg="#c0392b", hover="#c0392b"))
+                _start_btn.setStyleSheet(_lbl_ss.format(fg="#888888", hover=_ACCENT))
+
+            _start_btn.clicked.connect(_on_start)
+            _stop_btn.clicked.connect(_on_stop)
 
             knob_row = QWidget()
             knob_row.setStyleSheet("background: transparent;")
             _knob_hl = QHBoxLayout(knob_row)
-            _knob_hl.setContentsMargins(8, 4, 8, 4)
+            _knob_hl.setContentsMargins(0, 8, 0, 8)
             _knob_hl.setSpacing(16)
+            _knob_hl.addStretch()
+            _knob_hl.addWidget(_start_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
             _knob_hl.addWidget(knob_btn)
-            _knob_hl.addWidget(_knob_lbl)
+            _knob_hl.addWidget(_stop_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
             _knob_hl.addStretch()
             home_vl.addWidget(knob_row)
             _update_controls()  # re-run now that knob_row is assigned
@@ -647,7 +732,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     history_textbox.setReadOnly(True)
     history_textbox.setFixedHeight(180)
     history_textbox.setStyleSheet(
-        f"background-color: #262626; color: {_TEXT}; border-radius: 8px; font-size: 12px;"
+        f"background-color: transparent; color: {_TEXT}; border: none; font-size: 12px;"
     )
     home_vl.addWidget(history_textbox)
 
@@ -829,7 +914,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     bv_lbl = QLabel("Beep Volume")
     bv_lbl.setFixedWidth(120)
     bv_lbl.setStyleSheet(f"color: {_TEXT};")
-    bv_slider = QSlider(Qt.Horizontal)
+    bv_slider = _no_scroll(QSlider(Qt.Horizontal))
     bv_slider.setRange(0, 100)
     bv_slider.setValue(int(ptt_beep_volume.get()))
     bv_slider.setFixedWidth(200)
@@ -975,6 +1060,31 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     pers_vl.addWidget(wake_row)
 
     settings_vl.addWidget(pers_card)
+
+    # Home Theme (premium only)
+    if _premium:
+        for w in _section_label("Home Theme", "Choose the background theme for the home tab."):
+            settings_vl.addWidget(w)
+        theme_card = _card_frame()
+        theme_vl = QVBoxLayout(theme_card)
+        theme_vl.setContentsMargins(12, 8, 12, 8)
+
+        theme_lbl = QLabel("Theme")
+        theme_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+        theme_combo = _make_combo(list(_PREMIUM_THEMES.keys()), 200)
+        _current_theme = cfg.get("home_theme", "Particle Network")
+        if _current_theme in _PREMIUM_THEMES:
+            theme_combo.setCurrentText(_current_theme)
+
+        def _on_theme_changed(name: str):
+            cfg["home_theme"] = name
+            _save_config_ui(cfg)
+            _apply_home_theme(name)
+
+        theme_combo.currentTextChanged.connect(_on_theme_changed)
+        theme_row = _hrow(theme_lbl, theme_combo)
+        theme_vl.addWidget(theme_row)
+        settings_vl.addWidget(theme_card)
 
     # Game Overlay
     for w in _section_label("Game Overlay", "A transparent always-on-top bar showing your last 3 voice exchanges. Say 'show overlay' / 'hide overlay' or use a hotkey."):
@@ -1505,7 +1615,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # STATUS BAR (bottom of window, outside tabs)
     # =====================================================================
     status_frame = QWidget()
-    status_frame.setStyleSheet(f"background-color: {_SURFACE}; border-top: 1px solid #3a3a3a;")
+    status_frame.setStyleSheet(f"background-color: {_SURFACE}; border-top: 1px solid #222222;")
     status_frame.setFixedHeight(56)
     status_layout = QHBoxLayout(status_frame)
     status_layout.setContentsMargins(12, 0, 12, 0)
@@ -1521,6 +1631,9 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     last_kw.setStyleSheet("font-weight: bold; font-size: 11px; color: #ffffff;")
     transcript_entry = _make_entry(260)
     transcript_entry.setReadOnly(True)
+    transcript_entry.setStyleSheet(
+        f"background-color: transparent; color: {_TEXT}; border: none; padding: 4px 8px;"
+    )
 
     status_layout.addWidget(status_kw)
     status_layout.addWidget(_indicator)
