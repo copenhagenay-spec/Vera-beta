@@ -1,0 +1,4 @@
+default theme — free tier
+assets needed:
+  knob.png       — pill button image (same dimensions as premium knobs)
+  background.mp4 — optional subtle background loop (or leave absent for solid bg)

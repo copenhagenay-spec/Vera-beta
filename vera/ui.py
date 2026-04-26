@@ -6,11 +6,12 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QComboBox, QCheckBox, QRadioButton, QButtonGroup,
     QSlider, QTextEdit, QListWidget, QAbstractItemView,
-    QTabWidget, QScrollArea, QFrame, QProgressBar, QSizePolicy,
+    QStackedWidget, QScrollArea, QFrame, QProgressBar, QSizePolicy,
     QSpacerItem,
 )
-from PySide6.QtCore import Qt, Signal, QObject, QSize
-from PySide6.QtGui import QFont, QPixmap, QColor, QIcon
+from PySide6.QtCore import Qt, Signal, QObject, QSize, QUrl
+from PySide6.QtGui import QFont, QPixmap, QColor, QIcon, QPainter
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink
 
 
 # ---------------------------------------------------------------------------
@@ -39,9 +40,35 @@ _PREM_TITLE_COLOR  = "#c9a84c"
 
 
 # Premium home tab themes — display name → {bg, knob} filenames in data/assets/
+# bg can be .png (static) or .mp4 (animated via QMediaPlayer)
 _PREMIUM_THEMES: dict[str, dict] = {
-    "Particle Network": {"bg": "backgroun.png",  "knob": "goldknob.png"},
-    "Emerald":          {"bg": "backgroun2.png", "knob": "emeraldknob.png"},
+    "Default": {
+        "folder": "default",
+        "icon_active": "#2563eb",
+        "accent_rgb":  (37, 99, 235),
+        "button_rgb":  (29, 78, 188),
+        "gradient": "stop:0 #1a1a1a, stop:1 #212121",
+        "card_surface": "#2b2b2b",
+        "title_color": "#ffffff",
+    },
+    "Particle Network": {
+        "folder": "particle_network",
+        "icon_active": "#c9a84c",
+        "accent_rgb":  (201, 168, 76),
+        "button_rgb":  (140, 108, 28),
+        "gradient": "stop:0 #141414, stop:1 #1a1510",
+        "card_surface": "#1e1a14",
+        "title_color": "#c9a84c",
+    },
+    "Emerald": {
+        "folder": "emerald",
+        "icon_active": "#ffffff",
+        "accent_rgb":  (52, 211, 112),
+        "button_rgb":  (36, 160, 82),
+        "gradient": "stop:0 #0c1410, stop:1 #101a10",
+        "card_surface": "#0e1a10",
+        "title_color": "#c8ffe8",
+    },
 }
 
 
@@ -65,6 +92,10 @@ _FONT_SCALE_MAP    = {"Normal": 1.0, "Large": 1.25, "X-Large": 1.5}
 
 # Each entry: (QLabel, base_px, bold)
 _scalable_labels: list = []
+
+# Premium card frames registered so theme switches can update their border color
+# Each entry: (QFrame, alpha)
+_theme_cards: list = []
 
 
 def _make_scalable_font(px: int, bold: bool = False) -> QFont:
@@ -109,13 +140,14 @@ def _rebuild_styles() -> None:
         QPushButton:hover {{ background-color: {_ACCENT_HOVER}; }}
         QPushButton:pressed {{ background-color: {_ACCENT_PRESS}; }}
     """
+    _is_prem = (_SURFACE == _PREM_SURFACE)
     _BTN_SECONDARY = f"""
         QPushButton {{
-            background-color: #404040; color: {_TEXT};
+            background-color: {"#252520" if _is_prem else "#404040"}; color: {_TEXT};
             border-radius: 6px; padding: 5px 12px;
             font-size: 12px;
         }}
-        QPushButton:hover {{ background-color: #505050; }}
+        QPushButton:hover {{ background-color: {"#2f2f28" if _is_prem else "#505050"}; }}
     """
     _BTN_DANGER = f"""
         QPushButton {{
@@ -178,6 +210,7 @@ _rebuild_styles()
 def _primary_btn(text, command=None) -> QPushButton:
     btn = QPushButton(text)
     btn.setStyleSheet(_BTN_PRIMARY)
+    btn.setProperty("theme_role", "primary")
     if command:
         btn.clicked.connect(command)
     return btn
@@ -186,6 +219,7 @@ def _primary_btn(text, command=None) -> QPushButton:
 def _secondary_btn(text, command=None) -> QPushButton:
     btn = QPushButton(text)
     btn.setStyleSheet(_BTN_SECONDARY)
+    btn.setProperty("theme_role", "secondary")
     if command:
         btn.clicked.connect(command)
     return btn
@@ -202,6 +236,7 @@ def _danger_btn(text, command=None) -> QPushButton:
 def _muted_btn(text, command=None) -> QPushButton:
     btn = QPushButton(text)
     btn.setStyleSheet(_BTN_MUTED)
+    btn.setProperty("theme_role", "muted")
     if command:
         btn.clicked.connect(command)
     return btn
@@ -340,9 +375,19 @@ def _section_label(text, help_text=None) -> tuple:
     return widgets
 
 
-def _card_frame() -> QFrame:
+def _card_frame(alpha: int = 255) -> QFrame:
     f = QFrame()
-    f.setStyleSheet(f"QFrame {{ background-color: {_SURFACE}; border-radius: 10px; }}")
+    is_prem = (_SURFACE == _PREM_SURFACE)
+    border  = f"border-left: 2px solid rgba({','.join(str(int(_ACCENT[i:i+2],16)) for i in (1,3,5))},80);" if is_prem else ""
+    if alpha < 255:
+        r = int(_SURFACE[1:3], 16)
+        g = int(_SURFACE[3:5], 16)
+        b = int(_SURFACE[5:7], 16)
+        f.setStyleSheet(f"QFrame {{ background-color: rgba({r},{g},{b},{alpha}); border-radius: 10px; {border} }}")
+    else:
+        f.setStyleSheet(f"QFrame {{ background-color: {_SURFACE}; border-radius: 10px; {border} }}")
+    if is_prem:
+        _theme_cards.append((f, alpha))
     return f
 
 
@@ -362,6 +407,8 @@ def _scrollable_tab() -> tuple[QScrollArea, QWidget, QVBoxLayout]:
     area = QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     area.setStyleSheet("QScrollArea { background: transparent; border: none; }")
     inner = QWidget()
     inner.setStyleSheet("background: transparent;")
@@ -405,6 +452,12 @@ class _OverlayWidget(QWidget):
 def build_ui(window, state: dict, callbacks: dict, constants: dict):
     from license import is_premium
     from config import load_config as _load_config_ui, save_config as _save_config_ui
+    import os as _os_fonts
+    from PySide6.QtGui import QFontDatabase
+    _font_path = _os_fonts.path.join(_os_fonts.path.dirname(_os_fonts.path.abspath(__file__)), "data", "assets", "fonts", "Cinzel[wght].ttf")
+    if _os_fonts.path.isfile(_font_path):
+        QFontDatabase.addApplicationFont(_font_path)
+    _theme_cards.clear()
     cfg = _load_config_ui()
 
     if is_premium():
@@ -515,65 +568,208 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     outer_vl.setSpacing(0)
 
     # =====================================================================
-    # TAB WIDGET
+    # SIDEBAR + STACKED CONTENT
     # =====================================================================
-    tabs = QTabWidget()
-    tabs.setStyleSheet(f"""
-        QTabWidget::pane {{ border: none; background: {_BG}; }}
-        QTabBar::tab {{
-            background: #2b2b2b; color: #aaaaaa;
-            padding: 8px 16px; border: none;
-        }}
-        QTabBar::tab:selected {{ background: {_BG}; color: #ffffff; border-bottom: 2px solid {_ACCENT}; }}
-        QTabBar::tab:hover {{ background: #333333; }}
-    """)
-    outer_vl.addWidget(tabs, stretch=1)
+    content_row = QWidget()
+    content_row.setStyleSheet("background: transparent;")
+    content_hl = QHBoxLayout(content_row)
+    content_hl.setContentsMargins(0, 0, 0, 0)
+    content_hl.setSpacing(0)
+    outer_vl.addWidget(content_row, stretch=1)
+
+    # Stack takes full width — sidebar overlays on top so video shows through
+    stack = QStackedWidget()
+    if is_premium():
+        stack.setStyleSheet(
+            "QStackedWidget { background: qlineargradient("
+            "x1:0, y1:0, x2:0, y2:1, stop:0 #141414, stop:1 #1a1510); }"
+        )
+    else:
+        stack.setStyleSheet(f"QStackedWidget {{ background-color: {_BG}; }}")
+    content_hl.addWidget(stack, stretch=1)
+
+    # Sidebar floats over the left edge of the stack
+    sidebar = QWidget(content_row)
+    sidebar.setFixedWidth(56)
+    sidebar.setStyleSheet("background-color: #161616;")
+    sidebar_vl = QVBoxLayout(sidebar)
+    sidebar_vl.setContentsMargins(4, 52, 4, 8)
+    sidebar_vl.setSpacing(4)
+    sidebar_vl.setAlignment(Qt.AlignTop)
+    sidebar.raise_()
+
+    _cr_orig_resize = content_row.resizeEvent
+    def _content_row_resize(event):
+        sidebar.setGeometry(0, 0, 56, content_row.height())
+        _cr_orig_resize(event)
+    content_row.resizeEvent = _content_row_resize
 
     # =====================================================================
-    # HOME TAB
+    # HOME PAGE
     # =====================================================================
     home_area, home_inner, home_vl = _scrollable_tab()
-    tabs.addTab(home_area, "Home")
+    stack.addWidget(home_area)
 
-    _bg_lbl_ref   = [None]  # mutable ref so theme switcher can update background
-    _knob_btn_ref = [None]  # mutable ref so theme switcher can update knob image
+    _bg_frame_ref  = [None]  # current QPixmap painted by home_inner.paintEvent
+    _bg_player_ref = [None]  # QMediaPlayer for MP4 backgrounds
+    _bg_sink_ref   = [None]  # QVideoSink for MP4 frame capture
+    _knob_btn_ref  = [None]  # mutable ref so theme switcher can update knob image
+    _nav_btns      = []      # populated later; empty list guards early _apply_home_theme calls
+    _COLOR_ACTIVE  = [_PREM_ACCENT if is_premium() else _ACCENT]  # mutable so theme can update it
+    _theme_seg_btns   = []   # [seg_hold, seg_toggle, seg_wake] — set after settings tab is built
+    _theme_slider_ref = [None]  # beep volume slider
+    _theme_title_ref  = [None]  # home tab VERA+ title label
+    _theme_logo_ref   = [None]  # home tab logo QLabel
+
+    # Override home_inner paintEvent so video/PNG frames composite naturally
+    # with children that have rgba stylesheet backgrounds
+    _hi_orig_paint = home_inner.paintEvent
+    def _home_paint_bg(event, _inner=home_inner, _ref=_bg_frame_ref):
+        if _ref[0] is not None:
+            p = QPainter(_inner)
+            p.drawPixmap(_inner.rect(), _ref[0])
+        else:
+            _hi_orig_paint(event)
+    home_inner.paintEvent = _home_paint_bg
 
     def _apply_home_theme(theme_name: str):
         import os as _os_bg
         theme = _PREMIUM_THEMES.get(theme_name, {})
-        # --- background ---
-        bg_file = theme.get("bg", "")
-        if not bg_file:
-            if _bg_lbl_ref[0]:
-                _bg_lbl_ref[0].setVisible(False)
-        else:
-            _bg_path = _os_bg.path.join(_os_bg.path.dirname(_os_bg.path.abspath(__file__)), "data", "assets", bg_file)
-            px = QPixmap(_bg_path)
-            if not px.isNull():
-                if _bg_lbl_ref[0] is None:
-                    lbl = QLabel(home_inner)
-                    lbl.setScaledContents(True)
-                    lbl.lower()
-                    lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
-                    _bg_lbl_ref[0] = lbl
-                    _orig_resize = home_inner.resizeEvent
-                    def _home_resize(event, _lbl=lbl):
-                        _lbl.setGeometry(0, 0, home_inner.width(), home_inner.height())
-                        _orig_resize(event)
-                    home_inner.resizeEvent = _home_resize
-                _bg_lbl_ref[0].setPixmap(px)
-                _bg_lbl_ref[0].setVisible(True)
-                _bg_lbl_ref[0].setGeometry(0, 0, home_inner.width(), home_inner.height())
+        _theme_dir = _os_bg.path.join(_os_bg.path.dirname(_os_bg.path.abspath(__file__)), "data", "assets", "themes", theme.get("folder", ""))
+        bg_path  = _os_bg.path.join(_theme_dir, "background.mp4")
+        is_video = _os_bg.path.isfile(bg_path)
+
+        if _bg_player_ref[0]:
+            _bg_player_ref[0].stop()
+
+        if not is_video:
+            _bg_frame_ref[0] = None
+            home_inner.update()
+        elif is_video:
+            if _bg_player_ref[0] is None:
+                sink = QVideoSink()
+                def _on_frame(frame):
+                    img = frame.toImage()
+                    if not img.isNull():
+                        _bg_frame_ref[0] = QPixmap.fromImage(img)
+                        home_inner.update()
+                sink.videoFrameChanged.connect(_on_frame)
+                _bg_sink_ref[0] = sink
+
+                player = QMediaPlayer()
+                audio = QAudioOutput()
+                audio.setVolume(0.0)
+                player.setAudioOutput(audio)
+                player.setVideoOutput(sink)
+                player.setLoops(QMediaPlayer.Infinite)
+                _bg_player_ref[0] = player
+
+            if _bg_player_ref[0].source().toLocalFile() != bg_path:
+                _bg_player_ref[0].setSource(QUrl.fromLocalFile(bg_path))
+                _bg_player_ref[0].play()
+        # --- logo ---
+        if _theme_logo_ref[0] is not None:
+            _logo_path = _os_bg.path.join(_theme_dir, "logo.png")
+            _logo_px = QPixmap(_logo_path)
+            if not _logo_px.isNull():
+                _theme_logo_ref[0].setPixmap(_logo_px.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         # --- knob ---
-        knob_file = theme.get("knob", "")
-        if knob_file and _knob_btn_ref[0] is not None:
-            _knob_path = _os_bg.path.join(_os_bg.path.dirname(_os_bg.path.abspath(__file__)), "data", "assets", knob_file)
+        if _knob_btn_ref[0] is not None:
+            _knob_path = _os_bg.path.join(_theme_dir, "knob.png")
             _knob_px = QPixmap(_knob_path)
             if not _knob_px.isNull():
                 btn = _knob_btn_ref[0]
                 scaled = _knob_px.scaledToWidth(btn.width(), Qt.SmoothTransformation)
                 btn.setIcon(QIcon(scaled))
                 btn.setIconSize(scaled.size())
+        # --- icon rail color ---
+        icon_color = theme.get("icon_active", _PREM_ACCENT)
+        _COLOR_ACTIVE[0] = icon_color
+        if _nav_btns:
+            cur = stack.currentIndex()
+            for _i, _b in enumerate(_nav_btns):
+                _b.setIcon(_tint_icon(_NAV_ITEMS[_i][0], icon_color if _i == cur else _COLOR_INACTIVE))
+
+        # --- stack gradient ---
+        grad = theme.get("gradient", "stop:0 #141414, stop:1 #1a1510")
+        stack.setStyleSheet(
+            f"QStackedWidget {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, {grad}); }}"
+        )
+
+        # --- title color ---
+        title_col = theme.get("title_color", _PREM_TITLE_COLOR)
+        if _theme_title_ref[0]:
+            _theme_title_ref[0].setStyleSheet(
+                f"font-family: 'Cinzel'; font-size: 28px; color: {title_col}; background: transparent;"
+            )
+
+        # --- card borders + surface ---
+        ar, ag, ab = theme.get("accent_rgb", (201, 168, 76))
+        card_surf = theme.get("card_surface", "#1e1a14")
+        for _f, _alpha in _theme_cards:
+            _border = f"border-left: 2px solid rgba({ar},{ag},{ab},80);"
+            if _alpha < 255:
+                _r, _g, _b = int(card_surf[1:3],16), int(card_surf[3:5],16), int(card_surf[5:7],16)
+                _f.setStyleSheet(f"QFrame {{ background-color: rgba({_r},{_g},{_b},{_alpha}); border-radius: 10px; {_border} }}")
+            else:
+                _f.setStyleSheet(f"QFrame {{ background-color: {card_surf}; border-radius: 10px; {_border} }}")
+
+        # --- seg buttons ---
+        if _theme_seg_btns:
+            _seg_color = f"rgba({ar},{ag},{ab},160)"
+            _seg_active_style = (
+                f"QPushButton {{ background-color: {_seg_color}; color: #ffffff;"
+                " border: none; padding: 6px 18px; font-size: 12px; font-weight: bold; }}"
+            )
+            _seg_inactive_style = (
+                "QPushButton { background-color: transparent; color: #aaaaaa;"
+                " border: none; padding: 6px 18px; font-size: 12px; }"
+            )
+            from config import load_config as _lc
+            _cur_mode = _lc().get("mode", "hold")
+            _mode_map = {_theme_seg_btns[0]: "hold", _theme_seg_btns[1]: "toggle", _theme_seg_btns[2]: "wake"}
+            for _sb, _m in _mode_map.items():
+                _sb.setStyleSheet(_seg_active_style if _m == _cur_mode else _seg_inactive_style)
+
+        # --- slider ---
+        if _theme_slider_ref[0]:
+            _sl = f"rgba({ar},{ag},{ab},140)"
+            _theme_slider_ref[0].setStyleSheet(
+                f"QSlider::groove:horizontal {{ height: 4px; background: #333; border-radius: 2px; }}"
+                f"QSlider::handle:horizontal {{ background: {_sl}; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }}"
+                f"QSlider::sub-page:horizontal {{ background: {_sl}; border-radius: 2px; }}"
+            )
+
+        # --- all primary / secondary / muted buttons across every tab ---
+        _br, _bg_, _bb = theme.get("button_rgb", (ar, ag, ab))
+        _hex = f"#{_br:02x}{_bg_:02x}{_bb:02x}"
+        _hex_h = f"#{max(0,_br-20):02x}{max(0,_bg_-20):02x}{max(0,_bb-20):02x}"
+        _hex_p = f"#{max(0,_br-35):02x}{max(0,_bg_-35):02x}{max(0,_bb-35):02x}"
+        _pri_style = (
+            f"QPushButton {{ background-color: {_hex}; color: #ffffff;"
+            f" border-radius: 8px; padding: 6px 14px; font-size: 13px; }}"
+            f"QPushButton:hover {{ background-color: {_hex_h}; }}"
+            f"QPushButton:pressed {{ background-color: {_hex_p}; }}"
+        )
+        _sec_style = (
+            f"QPushButton {{ background-color: rgba({ar},{ag},{ab},40); color: #ffffff;"
+            f" border-radius: 6px; padding: 5px 12px; font-size: 12px; }}"
+            f"QPushButton:hover {{ background-color: rgba({ar},{ag},{ab},70); }}"
+        )
+        _mut_style = (
+            f"QPushButton {{ background-color: transparent; color: #aaaaaa;"
+            f" border: 1px solid rgba({ar},{ag},{ab},60); border-radius: 6px;"
+            f" padding: 5px 12px; font-size: 12px; }}"
+            f"QPushButton:hover {{ background-color: rgba({ar},{ag},{ab},25); }}"
+        )
+        for _pb in central.findChildren(QPushButton):
+            _role = _pb.property("theme_role")
+            if _role == "primary":
+                _pb.setStyleSheet(_pri_style)
+            elif _role == "secondary":
+                _pb.setStyleSheet(_sec_style)
+            elif _role == "muted":
+                _pb.setStyleSheet(_mut_style)
 
     # Theme applied after knob is built — see below
 
@@ -593,25 +789,28 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         _wm_widget.setStyleSheet("background: transparent;")
         home_vl.addWidget(_wm_widget)
 
-    # Logo
-    logo_path = _load_logo()
-    if logo_path:
-        logo_lbl = QLabel()
-        px = QPixmap(logo_path)
+    # Logo — theme-specific if available, else fall back to _load_logo()
+    import os as _os_logo
+    _default_logo = _os_logo.path.join(_os_logo.path.dirname(_os_logo.path.abspath(__file__)), "data", "assets", "themes", "default", "logo.png")
+    _initial_logo = _load_logo() if not _os_logo.path.isfile(_default_logo) or is_premium() else _default_logo
+    logo_lbl = QLabel()
+    logo_lbl.setStyleSheet("background: transparent;")
+    logo_lbl.setAlignment(Qt.AlignCenter)
+    if _initial_logo:
+        px = QPixmap(_initial_logo)
         if not px.isNull():
             logo_lbl.setPixmap(px.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            logo_lbl.setAlignment(Qt.AlignCenter)
-            home_vl.addWidget(logo_lbl)
+    home_vl.addWidget(logo_lbl)
+    _theme_logo_ref[0] = logo_lbl
     title_lbl = QLabel("V  E  R  A  +" if is_premium() else "V  E  R  A")
     title_lbl.setAlignment(Qt.AlignCenter)
-    title_lbl.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {_TITLE_COLOR}; background: transparent;")
+    title_lbl.setStyleSheet(f"font-family: 'Cinzel'; font-size: 28px; color: {_TITLE_COLOR}; background: transparent;")
     home_vl.addWidget(title_lbl)
+    if is_premium():
+        _theme_title_ref[0] = title_lbl
 
-    # Controls section
-    for w in _section_label("Controls"):
-        home_vl.addWidget(w)
 
-    ctrl_card = _card_frame()
+    ctrl_card = _card_frame(alpha=160 if is_premium() else 255)
     ctrl_vl = QVBoxLayout(ctrl_card)
     ctrl_vl.setContentsMargins(12, 8, 12, 8)
 
@@ -659,8 +858,8 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         import os as _os
         from PySide6.QtWidgets import QGraphicsOpacityEffect as _QOpacity
         _saved_knob_theme = _PREMIUM_THEMES.get(cfg.get("home_theme", "Particle Network"), {})
-        _knob_file = _saved_knob_theme.get("knob", "goldknob.png")
-        _knob_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data", "assets", _knob_file)
+        _knob_folder = _saved_knob_theme.get("folder", "particle_network")
+        _knob_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data", "assets", "themes", _knob_folder, "knob.png")
         _knob_px = QPixmap(_knob_path)
         if not _knob_px.isNull():
             _pill_w = 320
@@ -750,7 +949,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # Community
     for w in _section_label("Community", "Join the VERA Discord server."):
         home_vl.addWidget(w)
-    comm_card = _card_frame()
+    comm_card = _card_frame(alpha=160 if is_premium() else 255)
     comm_vl = QVBoxLayout(comm_card)
     comm_vl.setContentsMargins(12, 8, 12, 8)
     comm_vl.addWidget(_hrow(_primary_btn("Join the Discord",
@@ -762,7 +961,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # SETTINGS TAB
     # =====================================================================
     settings_area, _, settings_vl = _scrollable_tab()
-    tabs.addTab(settings_area, "Settings")
+    stack.addWidget(settings_area)
 
     # Listening Mode
     for w in _section_label("Listening Mode", "Choose how VERA listens for your voice commands."):
@@ -771,9 +970,10 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     mode_cl = QVBoxLayout(mode_card)
     mode_cl.setContentsMargins(12, 10, 12, 10)
 
+    _seg_bg = "rgba(201,168,76,160)" if (_SURFACE == _PREM_SURFACE) else _ACCENT
     _SEG_ACTIVE = f"""
         QPushButton {{
-            background-color: {_ACCENT}; color: #ffffff;
+            background-color: {_seg_bg}; color: #ffffff;
             border: none; padding: 6px 18px; font-size: 12px; font-weight: bold;
         }}
     """
@@ -801,6 +1001,8 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         seg_layout.addWidget(btn)
+    if is_premium():
+        _theme_seg_btns.extend([seg_hold, seg_toggle, seg_wake])
 
     def _seg_select(active_mode: str):
         for btn, m in ((seg_hold, "hold"), (seg_toggle, "toggle"), (seg_wake, "wake")):
@@ -929,9 +1131,12 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     bv_slider.setRange(0, 100)
     bv_slider.setValue(int(ptt_beep_volume.get()))
     bv_slider.setFixedWidth(200)
-    bv_slider.setStyleSheet(f"QSlider::groove:horizontal {{ height: 4px; background: #444; border-radius: 2px; }}"
-                             f"QSlider::handle:horizontal {{ background: {_ACCENT}; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }}"
-                             f"QSlider::sub-page:horizontal {{ background: {_ACCENT}; border-radius: 2px; }}")
+    _sl_color = "rgba(201,168,76,140)" if (_SURFACE == _PREM_SURFACE) else _ACCENT
+    bv_slider.setStyleSheet(f"QSlider::groove:horizontal {{ height: 4px; background: #333; border-radius: 2px; }}"
+                             f"QSlider::handle:horizontal {{ background: {_sl_color}; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }}"
+                             f"QSlider::sub-page:horizontal {{ background: {_sl_color}; border-radius: 2px; }}")
+    if is_premium():
+        _theme_slider_ref[0] = bv_slider
     bv_val_lbl = QLabel(f"{ptt_beep_volume.get()}%")
     bv_val_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 40px;")
 
@@ -1043,6 +1248,49 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     gaming_row_l.addWidget(gaming_desc, 1)
     pers_vl.addWidget(gaming_row)
 
+    settings_vl.addWidget(pers_card)
+
+    # ── Premium ──────────────────────────────────────────────────────────────
+    for w in _section_label("Premium", "License key and premium features."):
+        settings_vl.addWidget(w)
+    prem_card = _card_frame()
+    prem_vl = QVBoxLayout(prem_card)
+    prem_vl.setContentsMargins(12, 8, 12, 8)
+    prem_vl.setSpacing(8)
+
+    # License key
+    _key_lbl = QLabel("License key")
+    _key_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    _key_entry = QLineEdit()
+    _key_entry.setFixedWidth(220)
+    _key_entry.setPlaceholderText("SHRA-XXXX-XXXX-XXXX-XXXX-XXXX")
+    _key_entry.setText(cfg.get("license_key", ""))
+    _key_status = _hint_label("")
+    def _activate_key():
+        from license import _validate_key as _vk
+        _k = _key_entry.text().strip()
+        if _vk(_k):
+            _c = _load_config_ui()
+            _c["license_key"] = _k
+            _save_config_ui(_c)
+            _key_status.setText("  Valid — restart VERA to activate")
+            _key_status.setStyleSheet(f"color: #34d370; font-size: 11px;")
+        else:
+            _key_status.setText("  Invalid key")
+            _key_status.setStyleSheet(f"color: #dc2626; font-size: 11px;")
+    _key_btn = _primary_btn("Activate", _activate_key)
+    _key_btn.setFixedWidth(72)
+    _key_row = QWidget()
+    _key_hl = QHBoxLayout(_key_row)
+    _key_hl.setContentsMargins(0, 0, 0, 0)
+    _key_hl.setSpacing(8)
+    _key_hl.addWidget(_key_lbl)
+    _key_hl.addWidget(_key_entry)
+    _key_hl.addWidget(_key_btn)
+    _key_hl.addWidget(_key_status)
+    _key_hl.addStretch()
+    prem_vl.addWidget(_key_row)
+
     # Custom wake phrase (premium)
     from config import load_config as _load_cfg
     _cfg_wake = _load_cfg().get("custom_wake_phrase", "")
@@ -1060,42 +1308,36 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         wake_save.clicked.connect(lambda: callbacks["set_custom_wake_phrase"](wake_entry.text()))
     wake_row = QWidget()
     wake_row_l = QHBoxLayout(wake_row)
-    wake_row_l.setContentsMargins(0, 4, 0, 0)
+    wake_row_l.setContentsMargins(0, 0, 0, 0)
     wake_row_l.setSpacing(8)
     wake_row_l.addWidget(wake_lbl)
     wake_row_l.addWidget(wake_entry)
     wake_row_l.addWidget(wake_save)
     if not _premium:
-        wake_row_l.addWidget(_hint_label("  Premium feature"))
+        wake_row_l.addWidget(_hint_label("  Requires active license"))
     wake_row_l.addStretch()
-    pers_vl.addWidget(wake_row)
+    prem_vl.addWidget(wake_row)
 
-    settings_vl.addWidget(pers_card)
-
-    # Home Theme (premium only)
+    # Home theme (premium)
+    theme_lbl = QLabel("Home theme")
+    theme_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    theme_combo = _make_combo(list(_PREMIUM_THEMES.keys()), 200)
+    theme_combo.setEnabled(_premium)
+    _current_theme = cfg.get("home_theme", "Particle Network")
+    if _current_theme in _PREMIUM_THEMES:
+        theme_combo.setCurrentText(_current_theme)
+    def _on_theme_changed(name: str):
+        cfg["home_theme"] = name
+        _save_config_ui(cfg)
+        _apply_home_theme(name)
     if _premium:
-        for w in _section_label("Home Theme", "Choose the background theme for the home tab."):
-            settings_vl.addWidget(w)
-        theme_card = _card_frame()
-        theme_vl = QVBoxLayout(theme_card)
-        theme_vl.setContentsMargins(12, 8, 12, 8)
-
-        theme_lbl = QLabel("Theme")
-        theme_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-        theme_combo = _make_combo(list(_PREMIUM_THEMES.keys()), 200)
-        _current_theme = cfg.get("home_theme", "Particle Network")
-        if _current_theme in _PREMIUM_THEMES:
-            theme_combo.setCurrentText(_current_theme)
-
-        def _on_theme_changed(name: str):
-            cfg["home_theme"] = name
-            _save_config_ui(cfg)
-            _apply_home_theme(name)
-
         theme_combo.currentTextChanged.connect(_on_theme_changed)
-        theme_row = _hrow(theme_lbl, theme_combo)
-        theme_vl.addWidget(theme_row)
-        settings_vl.addWidget(theme_card)
+    theme_row = _hrow(theme_lbl, theme_combo)
+    if not _premium:
+        theme_row.layout().addWidget(_hint_label("  Requires active license"))
+    prem_vl.addWidget(theme_row)
+
+    settings_vl.addWidget(prem_card)
 
     # Game Overlay
     for w in _section_label("Game Overlay", "A transparent always-on-top bar showing your last 3 voice exchanges. Say 'show overlay' / 'hide overlay' or use a hotkey."):
@@ -1232,7 +1474,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # APPS TAB
     # =====================================================================
     apps_area, _, apps_vl = _scrollable_tab()
-    tabs.addTab(apps_area, "Apps")
+    stack.addWidget(apps_area)
 
     _ra_spacer = QWidget(); _ra_spacer.setFixedHeight(6)
     apps_vl.addWidget(_ra_spacer)
@@ -1293,7 +1535,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # INTEGRATIONS TAB
     # =====================================================================
     integ_area, _, integ_vl = _scrollable_tab()
-    tabs.addTab(integ_area, "Integrations")
+    stack.addWidget(integ_area)
 
     for w in _section_label("AI Assistant", "Use `ask <question>` to query AI.\nGet your free key at console.groq.com -> API Keys."):
         integ_vl.addWidget(w)
@@ -1421,7 +1663,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # DISCORD TAB
     # =====================================================================
     discord_area, _, discord_vl = _scrollable_tab()
-    tabs.addTab(discord_area, "Discord")
+    stack.addWidget(discord_area)
 
     for w in _section_label("Bot Credentials", "Required for `read discord`.\nGet your bot token from discord.dev."):
         discord_vl.addWidget(w)
@@ -1505,7 +1747,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     # TRAINING TAB
     # =====================================================================
     training_area, _, training_vl = _scrollable_tab()
-    tabs.addTab(training_area, "Training")
+    stack.addWidget(training_area)
 
     from skills import load_unmatched, save_user_mishear, dismiss_unmatched, load_groq_handled, dismiss_groq_handled
 
@@ -1621,6 +1863,109 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         _muted_btn("Refresh", _refresh_groq_handled),
     ))
     training_vl.addStretch()
+
+    # =====================================================================
+    # ICON RAIL (built after all pages are in the stack)
+    # =====================================================================
+    import os as _ir_os
+    _ICON_DIR = _ir_os.path.join(_ir_os.path.dirname(_ir_os.path.abspath(__file__)), "data", "assets", "IconSVGs")
+    _ICON_SIZE = 24
+
+    def _tint_icon(filename: str, color: str) -> QIcon:
+        path = _ir_os.path.join(_ICON_DIR, filename)
+        px = QPixmap(path)
+        if px.isNull():
+            return QIcon()
+        px = px.scaled(_ICON_SIZE, _ICON_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        tinted = QPixmap(px.size())
+        tinted.fill(Qt.transparent)
+        p = QPainter(tinted)
+        p.drawPixmap(0, 0, px)
+        p.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        p.fillRect(tinted.rect(), QColor(color))
+        p.end()
+        return QIcon(tinted)
+
+    _NAV_ITEMS = [
+        ("home.svg",         "Home"),
+        ("gear.svg",         "Settings"),
+        ("apps.svg",         "Apps"),
+        ("integrations.svg", "Integrations"),
+        ("discord-logo.svg", "Discord"),
+        ("training.svg",     "Training"),
+    ]
+    _COLOR_INACTIVE = "#444444"
+    _COLOR_HOVER    = "#cccccc"
+
+    _nav_tooltip = QLabel(central)
+    _nav_tooltip.setStyleSheet(
+        "QLabel { background-color: #2b2b2b; color: #ffffff; "
+        "padding: 4px 10px; border-radius: 6px; font-size: 12px; }"
+    )
+    _nav_tooltip.hide()
+    _nav_tooltip.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def _nav_select(idx: int):
+        stack.setCurrentIndex(idx)
+        for i, btn in enumerate(_nav_btns):
+            btn.setIcon(_tint_icon(_NAV_ITEMS[i][0], _COLOR_ACTIVE[0] if i == idx else _COLOR_INACTIVE))
+
+    for _ni, (_icon_file, _icon_label) in enumerate(_NAV_ITEMS):
+        _nav_btn = QPushButton()
+        _nav_btn.setFixedSize(48, 48)
+        _nav_btn.setIcon(_tint_icon(_icon_file, _COLOR_ACTIVE[0] if _ni == 0 else _COLOR_INACTIVE))
+        _nav_btn.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        _nav_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; border-radius: 8px; }"
+            "QPushButton:hover { background: rgba(255,255,255,15); }"
+        )
+        _nav_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _nav_btn.clicked.connect(lambda checked=False, idx=_ni: _nav_select(idx))
+
+        def _attach_hover(_btn, _label_txt, _idx):
+            def _enter(event):
+                _btn.setIcon(_tint_icon(_NAV_ITEMS[_idx][0], _COLOR_HOVER))
+                pos = _btn.mapTo(central, _btn.rect().topRight())
+                _nav_tooltip.setText(_label_txt)
+                _nav_tooltip.adjustSize()
+                _nav_tooltip.move(pos.x() + 6, pos.y() + (_btn.height() - _nav_tooltip.height()) // 2)
+                _nav_tooltip.raise_()
+                _nav_tooltip.show()
+            def _leave(event):
+                cur = stack.currentIndex()
+                _btn.setIcon(_tint_icon(_NAV_ITEMS[_idx][0], _COLOR_ACTIVE[0] if _idx == cur else _COLOR_INACTIVE))
+                _nav_tooltip.hide()
+            _btn.enterEvent = _enter
+            _btn.leaveEvent = _leave
+        _attach_hover(_nav_btn, _icon_label, _ni)
+
+        sidebar_vl.addWidget(_nav_btn)
+        _nav_btns.append(_nav_btn)
+
+    sidebar_vl.addStretch()
+
+    # Re-apply theme now that seg buttons, slider, and icon rail are all built
+    if is_premium():
+        _apply_home_theme(cfg.get("home_theme", "Particle Network"))
+
+    # Hamburger toggle button — always visible in top-left of content area
+    _sidebar_visible = [True]
+    _hamburger = QPushButton("☰", content_row)
+    _hamburger.setFixedSize(32, 32)
+    _hamburger.setStyleSheet(
+        "QPushButton { background: rgba(0,0,0,140); color: #cccccc; border: none;"
+        " border-radius: 6px; font-size: 16px; }"
+        "QPushButton:hover { background: rgba(255,255,255,30); color: #ffffff; }"
+    )
+    _hamburger.setCursor(Qt.CursorShape.PointingHandCursor)
+    _hamburger.move(8, 8)
+    _hamburger.raise_()
+
+    def _toggle_sidebar():
+        _sidebar_visible[0] = not _sidebar_visible[0]
+        sidebar.setVisible(_sidebar_visible[0])
+
+    _hamburger.clicked.connect(_toggle_sidebar)
 
     # =====================================================================
     # STATUS BAR (bottom of window, outside tabs)
@@ -1836,7 +2181,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         "keybinds_textbox": keybinds_textbox,
         "macros_textbox": macros_textbox,
         "macro_pending_textbox": macro_pending_textbox,
-        "tabview": tabs,
+        "tabview": stack,
         "save_button": save_button,
         "notice_frame": notice_frame,
         "notice_label": notice_label,

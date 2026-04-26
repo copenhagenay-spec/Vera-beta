@@ -865,6 +865,9 @@ def main() -> None:
             "keybinds": [k for k in keybinds if k.get("phrase") and k.get("key")],
             "dismissed_update_version": _dismissed_update_version["value"],
             "bug_report_secret": bug_report_secret_var.get(),
+            "onboarding_shown": bool(cfg.get("onboarding_shown", False)),
+            "premium_onboarding_shown": bool(cfg.get("premium_onboarding_shown", False)),
+            "license_key": cfg.get("license_key", ""),
         }
         if wizard_done is not None:
             data["wizard_done"] = bool(wizard_done)
@@ -2937,6 +2940,21 @@ def main() -> None:
                             action_callback=_dismiss_onboarding,
                         )
                     QTimer.singleShot(1500, _show_onboarding)
+                if _is_premium() and not cfg.get("premium_onboarding_shown"):
+                    def _show_premium_onboarding():
+                        def _dismiss_premium_onboarding():
+                            _hide_inline_notice()
+                            c = load_config()
+                            c["premium_onboarding_shown"] = True
+                            save_config(c)
+                        _show_inline_notice(
+                            'Welcome to VERA+. Themes and wake phrases are in Settings → Personality. Macros are in Integrations. Say "show help" to see everything you can do.',
+                            tone="info",
+                            duration_ms=0,
+                            action_text="Got it",
+                            action_callback=_dismiss_premium_onboarding,
+                        )
+                    QTimer.singleShot(2500, _show_premium_onboarding)
                 if idle_chatter.get():
                     def _do_startup_greeting():
                         import time as _t
