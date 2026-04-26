@@ -708,11 +708,13 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         card_surf = theme.get("card_surface", "#1e1a14")
         for _f, _alpha in _theme_cards:
             _border = f"border-left: 2px solid rgba({ar},{ag},{ab},80);"
+            _obj = _f.objectName()
+            _sel = f"QFrame#{_obj}" if _obj else "QFrame"
             if _alpha < 255:
                 _r, _g, _b = int(card_surf[1:3],16), int(card_surf[3:5],16), int(card_surf[5:7],16)
-                _f.setStyleSheet(f"QFrame {{ background-color: rgba({_r},{_g},{_b},{_alpha}); border-radius: 10px; {_border} }}")
+                _f.setStyleSheet(f"{_sel} {{ background-color: rgba({_r},{_g},{_b},{_alpha}); border-radius: 10px; {_border} }}")
             else:
-                _f.setStyleSheet(f"QFrame {{ background-color: {card_surf}; border-radius: 10px; {_border} }}")
+                _f.setStyleSheet(f"{_sel} {{ background-color: {card_surf}; border-radius: 10px; {_border} }}")
 
         # --- seg buttons ---
         if _theme_seg_btns:
@@ -1865,6 +1867,49 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     training_vl.addStretch()
 
     # =====================================================================
+    # ABOUT PAGE
+    # =====================================================================
+    import os as _ab_os
+    about_area, _, about_vl = _scrollable_tab()
+    stack.addWidget(about_area)
+
+    _ver_path = _ab_os.path.join(_ab_os.path.dirname(_ab_os.path.abspath(__file__)), "VERSION")
+    try:
+        with open(_ver_path, "r", encoding="utf-8") as _vf:
+            _ver_str = _vf.read().strip()
+    except Exception:
+        _ver_str = "—"
+
+    _about_card = QFrame()
+    _about_card.setObjectName("AboutCard")
+    _about_card.setStyleSheet(f"QFrame#AboutCard {{ background-color: {_SURFACE}; border-radius: 10px; }}")
+    _theme_cards.append((_about_card, 255))
+    _about_card_vl = QVBoxLayout(_about_card)
+    _about_card_vl.setContentsMargins(24, 24, 24, 24)
+    _about_card_vl.setSpacing(10)
+
+    _about_name = QLabel("VERA")
+    _about_name.setStyleSheet(f"color: {_TEXT}; font-size: 22px; font-weight: bold; background: transparent;")
+    _about_card_vl.addWidget(_about_name)
+
+    _about_ver = QLabel(f"Version {_ver_str}")
+    _about_ver.setStyleSheet(f"color: {_MUTED}; font-size: 13px; background: transparent;")
+    _about_card_vl.addWidget(_about_ver)
+
+    _about_div = QFrame()
+    _about_div.setFrameShape(QFrame.HLine)
+    _about_div.setStyleSheet("QFrame { border: none; border-top: 1px solid #3a3a3a; background: transparent; }")
+    _about_card_vl.addWidget(_about_div)
+
+    _about_copy = QLabel("© 2026 Forjem Software LLC. All rights reserved.")
+    _about_copy.setStyleSheet(f"color: {_MUTED}; font-size: 12px; background: transparent;")
+    _about_copy.setWordWrap(True)
+    _about_card_vl.addWidget(_about_copy)
+
+    about_vl.addWidget(_about_card)
+    about_vl.addStretch()
+
+    # =====================================================================
     # ICON RAIL (built after all pages are in the stack)
     # =====================================================================
     import os as _ir_os
@@ -1893,6 +1938,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         ("integrations.svg", "Integrations"),
         ("discord-logo.svg", "Discord"),
         ("training.svg",     "Training"),
+        ("info.svg",         "About"),
     ]
     _COLOR_INACTIVE = "#444444"
     _COLOR_HOVER    = "#cccccc"

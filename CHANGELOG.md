@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.99.5
+- Added: About tab — shows version number and Forjem Software LLC copyright; info icon in sidebar rail; card follows active theme
+- Fixed: "What can I say" / "Show help" now opens correctly and shows the VERA icon in the title bar
+- Fixed: Help dialog window stays open — was being garbage collected immediately after opening
+
+## 0.99.4
+- Fixed: "What can I say" / "Show help" now opens correctly — was silently failing after the PySide6 migration
+- Fixed: Help dialog now shows the VERA icon in the title bar
+
+## 0.99.3
+- Added: HMAC-signed license key system — cryptographically validated, no server required
+- Added: Premium settings consolidated into a dedicated section — license key, wake phrase, and theme all in one place
+- Added: Premium onboarding card on first launch — points you to exactly where everything lives
+- Fixed: Onboarding dismissed state now persists correctly through settings saves
+- Added: Animated video backgrounds for premium themes (Particle Network, Emerald)
+- Added: Sidebar icon rail replaces tab bar — collapsible via hamburger toggle
+- Added: Per-theme color system — buttons, slider, cards, and icons follow the active theme
+- Added: Per-theme logos — each theme has its own logo
+- Added: Default theme — available to free tier and as a clean premium option
+- Added: Cinzel font bundled — used for the VERA / VERA+ title across all tiers
+- Changed: Theme assets organized into structured folders
+
+## 0.99.2
+- Added: New pill knob control (Premium) — replaces the rotating knob with a sleek pill-shaped control
+- Added: Start Listening / Stop Listening labels sit directly on the black panels
+- Added: Knob color matches your selected theme — gold for Particle Network, emerald for Emerald
+- Fixed: Theme swap now updates both the background and the knob simultaneously
+
+## 0.99.1
+- Fixed: Scroll wheel no longer accidentally changes dropdowns and sliders on hover — must click first
+- Fixed: "search when is the next X" no longer triggers media skip instead of opening a browser search
+- Added: VERA now confirms web searches with a spoken response
+
+## 0.99
+- Added: PyArmor obfuscation — source code is now protected in all installer builds
+- Fixed: Dev-only files no longer ship to users; old copies removed automatically on next install
+- Added: Premium UI identity — gold theme, deeper background, VERA+ title bar and home screen title, VERA+/PREMIUM TIER watermarks
+- Added: Premium knob control — replaces Start/Stop buttons in Hold to Talk and Toggle modes; click toggles listening state
+
 ## 0.98.0.1
 - Fixed: "type" and "send message" commands failing with "cannot import name KbController" — public build import was broken after sync
 
