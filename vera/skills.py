@@ -1001,6 +1001,8 @@ def _web_search(query: str, allow_prompt: bool, confirm_fn=None) -> bool:
     return True
 
 
+_help_win_ref: list = []
+
 def _show_help() -> None:
     cfg = load_config()
     lines = [
@@ -1231,48 +1233,94 @@ def _show_help() -> None:
                 action_commands.append(phrase)
 
     try:
-        import customtkinter as ctk
-        ctk.set_appearance_mode("dark")
+        import re as _re
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QWidget, QFrame
+        )
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QFont, QIcon
+        from PySide6.QtWidgets import QApplication
 
-        root = ctk.CTk()
-        root.withdraw()
-        win = ctk.CTkToplevel(root)
-        win.title("What Can I Say?")
-        win.geometry("480x620")
-        win.resizable(True, True)
+        app = QApplication.instance()
+        if app is None:
+            return
 
-        title = ctk.CTkLabel(win, text="What Can I Say?", font=ctk.CTkFont(size=20, weight="bold"))
-        title.pack(pady=(16, 4))
+        win = QDialog()
+        win.setWindowTitle("What Can I Say?")
+        _ico_path = os.path.join(os.path.dirname(__file__), "data", "assets", "ipa.ico")
+        if os.path.isfile(_ico_path):
+            win.setWindowIcon(QIcon(_ico_path))
+        win.resize(480, 620)
+        win.setStyleSheet("background-color: #1a1a1a; color: #d0d0d0;")
 
-        divider = ctk.CTkFrame(win, height=2, fg_color="#3a3a3a")
-        divider.pack(fill="x", padx=16, pady=(0, 8))
+        outer_vl = QVBoxLayout(win)
+        outer_vl.setContentsMargins(16, 16, 16, 16)
+        outer_vl.setSpacing(8)
 
-        scroll = ctk.CTkScrollableFrame(win, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        title_lbl = QLabel("What Can I Say?")
+        title_font = QFont()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title_lbl.setFont(title_font)
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setStyleSheet("color: #ffffff;")
+        outer_vl.addWidget(title_lbl)
 
-        def _add_section(title_text, items):
-            hdr = ctk.CTkLabel(scroll, text=title_text, font=ctk.CTkFont(size=13, weight="bold"),
-                               text_color="#4fa3e0", anchor="w")
-            hdr.pack(fill="x", padx=8, pady=(12, 3))
-            card = ctk.CTkFrame(scroll, fg_color="#252525", corner_radius=10)
-            card.pack(fill="x", padx=4, pady=(0, 4))
-            for i, item in enumerate(items):
-                row_bg = "#2a2a2a" if i % 2 == 0 else "#252525"
-                row = ctk.CTkFrame(card, fg_color=row_bg, corner_radius=6)
-                row.pack(fill="x", padx=6, pady=2)
-                # Split on <placeholders> and render with color
-                import re as _re
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        divider.setStyleSheet("color: #3a3a3a;")
+        outer_vl.addWidget(divider)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_vl = QVBoxLayout(scroll_content)
+        scroll_vl.setContentsMargins(4, 4, 4, 4)
+        scroll_vl.setSpacing(4)
+        scroll_area.setWidget(scroll_content)
+        outer_vl.addWidget(scroll_area)
+
+        hdr_font = QFont()
+        hdr_font.setPointSize(11)
+        hdr_font.setBold(True)
+        item_font = QFont()
+        item_font.setPointSize(11)
+        placeholder_font = QFont()
+        placeholder_font.setPointSize(11)
+        placeholder_font.setItalic(True)
+
+        def _add_section(section_title, items):
+            hdr = QLabel(section_title)
+            hdr.setFont(hdr_font)
+            hdr.setStyleSheet("color: #4fa3e0; padding: 8px 8px 2px 8px;")
+            scroll_vl.addWidget(hdr)
+            card = QFrame()
+            card.setStyleSheet("QFrame { background-color: #252525; border-radius: 8px; }")
+            card_vl = QVBoxLayout(card)
+            card_vl.setContentsMargins(8, 6, 8, 6)
+            card_vl.setSpacing(2)
+            for item in items:
+                row = QWidget()
+                row.setStyleSheet("background: transparent;")
+                row_hl = QHBoxLayout(row)
+                row_hl.setContentsMargins(4, 3, 4, 3)
+                row_hl.setSpacing(0)
                 parts = _re.split(r"(<[^>]+>)", item)
-                inner = ctk.CTkFrame(row, fg_color="transparent")
-                inner.pack(anchor="w", padx=10, pady=5)
                 for part in parts:
+                    lbl = QLabel(part)
                     if part.startswith("<") and part.endswith(">"):
-                        lbl = ctk.CTkLabel(inner, text=part, font=ctk.CTkFont(size=12, slant="italic"),
-                                           text_color="#7ec8e3")
+                        lbl.setFont(placeholder_font)
+                        lbl.setStyleSheet("color: #7ec8e3;")
                     else:
-                        lbl = ctk.CTkLabel(inner, text=part, font=ctk.CTkFont(size=12),
-                                           text_color="#d0d0d0")
-                    lbl.pack(side="left")
+                        lbl.setFont(item_font)
+                        lbl.setStyleSheet("color: #d0d0d0;")
+                    row_hl.addWidget(lbl)
+                row_hl.addStretch()
+                card_vl.addWidget(row)
+            scroll_vl.addWidget(card)
 
         for section_title, items in SECTIONS:
             _add_section(section_title, items)
@@ -1283,10 +1331,13 @@ def _show_help() -> None:
         if action_commands:
             _add_section("Custom Actions", action_commands)
 
-        win.protocol("WM_DELETE_WINDOW", lambda: (win.destroy(), root.destroy()))
-        win.lift()
-        win.focus_force()
-        root.mainloop()
+        scroll_vl.addStretch()
+        win.setAttribute(Qt.WA_DeleteOnClose)
+        _help_win_ref.clear()
+        _help_win_ref.append(win)
+        win.show()
+        win.raise_()
+        win.activateWindow()
     except Exception as exc:
         print(f"Help display failed: {exc}")
 
@@ -1824,7 +1875,14 @@ def _intent(priority: int, pattern: str):
 # --- Help ---
 @_intent(1000, r"\b(what can i say|show commands|show help|list commands|what can you do|what can youtube|what do you do|what are you capable of)\b")
 def _ih_help(m, t, allow_prompt, confirm_fn, restart_fn):
-    threading.Thread(target=_show_help, daemon=True).start()
+    try:
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QApplication
+        _app = QApplication.instance()
+        if _app is not None:
+            QTimer.singleShot(0, _app, _show_help)
+    except Exception:
+        pass
     return True
 
 
