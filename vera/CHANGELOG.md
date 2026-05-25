@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.99.7.2 — Hotfix
+- Fixed: VERA would not launch after a fresh install — tour.py was missing from the installer package.
+
+## 0.99.7 — Steam Integration, Conversational AI & Stability
+- Fixed: Animated MP4 video background was continuously decoding frames and flooding the Qt event queue, causing severe input lag and audio delays in CPU/GPU-heavy games (Rust, Gray Zone Warfare). Gaming mode now pauses the video player entirely.
+- Fixed: Memory leak root cause identified — QPixmap accumulation and Qt event queue flooding from the video background caused memory growth under game load. Pausing video in gaming mode resolves this.
+- Fixed: PortAudio stream leak in the "read out" TTS path — was leaking a stream on every call. Now correctly delegates to the shared output stream context manager.
+- Fixed: Caps lock suppression restored after keyboard polling migration — toggle correction now fires on physical key release, completing in microseconds without interfering with push-to-talk.
+- Fixed: Home theme (Emerald, Particle Network, etc.) was resetting to Particle Network on restart after any settings save. The UI and settings save paths used separate config instances, so theme changes were silently overwritten.
+- Added: Freeze watchdog — detects Qt main thread freezes (heartbeat stale >10s), logs memory/thread diagnostics to data/logs/freeze_watchdog.log, and automatically restarts VERA.
+- Added: Dismiss button on info notifications — blue notification panels can now be closed without restarting VERA.
+- Added: Revert Changes button — appears alongside the Unsaved Changes button in the status bar; rolls back all unsaved settings changes to the last saved state.
+- Added: Spotlight tour for new users — a 4-step guided overlay that highlights the PTT key field and listening mode selector, then returns to the Home tab. Navigates automatically between tabs. Dismisses with Skip or Done and does not appear again after completion.
+- Added: Steam library auto-sync on startup — runs in a background thread, adds newly installed games and removes uninstalled ones from the apps list. Only touches Steam-sourced entries. Saves silently with no unsaved changes prompt.
+- Added: Steam auto gaming mode — detects when a Steam game is launched via registry and automatically enables gaming mode. Disables silently when the game closes, but only if VERA was the one that enabled it.
+- Added: Conversational memory — LLM responses now carry context across follow-up questions within the same session. History is shared across both the personality fallback and the ask command. Clears on restart, holds up to 5 exchanges.
+- Changed: Toggle key and Hold key settings merged into a single PTT Key field. All listening modes now share one key binding. Existing configs migrate automatically on first launch. If a mouse or joystick button is set and Toggle mode is selected, VERA automatically falls back to caps_lock and notifies the user.
+- Removed: Setup wizard removed. First-time experience is now handled by the guided spotlight tour.
+- Removed: Import Steam Games button — replaced by auto-sync.
+- Removed: Discord Rich Presence integration — was not working as intended.
+- Removed: pypresence and espeak-ng dependencies — no longer needed.
+
 ## 0.99.6
 - Fixed: Memory leak causing VERA to consume 9-16GB of RAM during long sessions — status bar was allocating Qt style objects on every update without releasing them
 - Fixed: Status updates now throttled to prevent burst allocation during rapid state changes
