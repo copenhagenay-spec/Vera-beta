@@ -1,0 +1,13 @@
+# SH|RA dependencies
+sounddevice
+faster-whisper
+pynput
+pystray
+pillow
+PySide6
+pyttsx3
+pycaw
+kokoro-onnx
+soundfile
+requests
+rapidfuzz

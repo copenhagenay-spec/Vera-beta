@@ -1,4 +1,4 @@
-# VERA — Voice Enabled Response Assistant
+# SH|RA — Voice Enabled Response Assistant
 
 Personal voice assistant for Windows. Speech recognition and TTS run locally — cloud AI is optional.
 
@@ -6,10 +6,10 @@ Personal voice assistant for Windows. Speech recognition and TTS run locally —
 
 ## Installation
 
-1. Download the latest **VERA_Setup** installer from the [Releases](../../releases) page
+1. Download the latest **SH|RA_Setup** installer from the [Releases](../../releases) page
 2. Run it — the installer handles everything automatically
 3. Python dependencies, the voice engine (espeak-ng), and the voice model (~310MB) are downloaded and installed silently
-4. Launch VERA from the desktop shortcut or Start Menu
+4. Launch SH|RA from the desktop shortcut or Start Menu
 
 > **Requires Python 3.11 or newer.** Download from [python.org](https://www.python.org/downloads/) — check **"Add Python to PATH"** during install.
 
@@ -22,7 +22,7 @@ The setup wizard opens automatically on first launch:
 1. Choose **Language** (English or Spanish)
 2. Choose **Listening Mode** — Wake Word, Hold-to-talk, or Push to Toggle
 3. Optional: **Import Steam Apps** to add your games as voice commands
-4. Click **Finish** — VERA starts listening in the background
+4. Click **Finish** — SH|RA starts listening in the background
 
 ---
 
@@ -65,7 +65,7 @@ Map a spoken phrase to a keypress or sequence of keys in the **Integrations** ta
 
 Chain multiple voice commands into one phrase — configured in the **Integrations** tab.
 
-> **Example:** Say "good morning" → VERA opens Spotify, reads the weather, and checks your reminders in sequence.
+> **Example:** Say "good morning" → SH|RA opens Spotify, reads the weather, and checks your reminders in sequence.
 
 ---
 
@@ -85,7 +85,7 @@ The `ask <question>` command supports on-demand AI responses. Paste your key in 
 | OpenAI | `sk-` | Paid — uses gpt-4o-mini |
 | Anthropic | `sk-ant-` | Paid — uses Claude Haiku |
 
-VERA detects which provider to use automatically based on your key format.
+SH|RA detects which provider to use automatically based on your key format.
 
 ---
 
@@ -94,13 +94,13 @@ VERA detects which provider to use automatically based on your key format.
 - **Nothing transcribed** — check Windows microphone permissions and your input device in Settings
 - **App won't open** — run `run_ipa.cmd` directly to see errors in the terminal
 - **Command not triggering** — check **Last Transcript** in the UI for misheard words; use the Training tab to add corrections
-- **Crash logs** — saved to `%LocalAppData%\VERA\data\logs\assistant.log`
+- **Crash logs** — saved to `%LocalAppData%\SH|RA\data\logs\assistant.log`
 
 ---
 
 ## Uninstall
 
-Use **Add or Remove Programs** → search for VERA, or run the uninstaller from the Start Menu.
+Use **Add or Remove Programs** → search for SH|RA, or run the uninstaller from the Start Menu.
 
 Your settings (`config.json`) and memory (`memory.json`) are preserved after uninstall in case you reinstall later.
 
@@ -112,12 +112,12 @@ If you prefer to run from source instead of using the installer:
 
 1. Clone the repo
 2. Run `setup_installer.cmd` to install dependencies
-3. Run `run_ipa.cmd` to start VERA
+3. Run `run_ipa.cmd` to start SH|RA
 
 ---
 
 ## Legal
 
-By using VERA you agree to the [Terms of Service](vera/docs/terms.md).
+By using SH|RA you agree to the [Terms of Service](shra/docs/terms.md).
 
-VERA uses open source libraries. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full details and LGPL compliance information.
+SH|RA uses open source libraries. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full details and LGPL compliance information.

@@ -65,9 +65,9 @@
 
 ## 0.99
 - Added: PyArmor obfuscation — source code is now protected in all installer builds
-- Fixed: Dev-only files no longer ship to users; old copies removed automatically on next install
+- Fixed: Dev-only files (smoke_test.py, sync_public.py, discord_post.py, etc.) no longer ship to users; old copies removed automatically on next install
 - Added: Premium UI identity — gold theme, deeper background, SH|RA+ title bar and home screen title, SH|RA+/PREMIUM TIER watermarks
-- Added: Premium knob control — replaces Start/Stop buttons in Hold to Talk and Toggle modes; click toggles listening state
+- Added: Premium knob control — replaces Start/Stop buttons in Hold to Talk and Toggle modes for premium users; click toggles listening state
 
 ## 0.98.0.1
 - Fixed: "type" and "send message" commands failing with "cannot import name KbController" — public build import was broken after sync
@@ -76,15 +76,6 @@
 - Added: Fuzzy intent routing — SH|RA now catches misheard commands that slip past exact matching; high-confidence mishears fire silently, mid-confidence triggers a "Did you mean X?" confirmation; confirmed matches auto-log to mishear training
 - Added: Custom wake phrase (Premium) — set your own trigger word alongside "shira" in Settings → Personality; updates live without restart
 - Added: First-launch onboarding card — new users see a prompt to try "show help" or "what can I say"; dismissed permanently with "Got it"
-
-## 0.97.9.1
-- Fixed: gaming mode now recognizes more natural phrasings — "gaming mode on", "turn gaming mode on", "gaming mode off", etc.
-- Added: Gaming mode toggle checkbox in Settings → Personality
-
-## 0.97.9
-- Improved: updater now downloads and runs the silent installer instead of extracting a zip — faster, cleaner, and handles all dependencies automatically
-- Fixed: Discord Rich Presence timer now resets correctly when SH|RA restarts — no longer requires a PC reboot to refresh
-- Fixed: tray icon import regression in public builds — SH|RA could show "Tray Unavailable" on fresh installs even with dependencies present
 
 ## 0.97.8.4
 - Fixed: "Downloading update..." status now shows immediately after confirming so it's clear the update is in progress
