@@ -15,6 +15,11 @@ else:
     base = os.path.dirname(os.path.abspath(__file__))
 
 def _find_pythonw():
+    # Prefer bundled embedded Python
+    embedded = os.path.join(base, "python", "pythonw.exe")
+    if os.path.exists(embedded):
+        return embedded
+
     local = os.environ.get("LOCALAPPDATA", "")
     pf    = os.environ.get("ProgramFiles", "")
     candidates = [
@@ -34,4 +39,6 @@ def _find_pythonw():
 
 pythonw   = _find_pythonw()
 assistant = os.path.join(base, "assistant.py")
-subprocess.Popen([pythonw, assistant], cwd=base)
+env = os.environ.copy()
+env["PYTHONPATH"] = base
+subprocess.Popen([pythonw, assistant], cwd=base, env=env)
