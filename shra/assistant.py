@@ -2743,7 +2743,8 @@ def main() -> None:
 
     def _create_shortcuts_worker():
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        target = os.path.join(base_dir, "launcher_out", "SHRA.exe")
+        target = os.path.join(base_dir, "python", "pythonw.exe")
+        arguments = f'"{os.path.join(base_dir, "assistant.py")}"'
         icon = os.path.join(base_dir, "data", "assets", "ipa.ico")
         desktop = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop", "SHRA.lnk")
         start_menu_dir = os.path.join(
@@ -2758,8 +2759,9 @@ def main() -> None:
                 f'$ws = New-Object -ComObject WScript.Shell; '
                 f'$s = $ws.CreateShortcut("{dest}"); '
                 f'$s.TargetPath = "{target}"; '
+                f'$s.Arguments = "{arguments}"; '
                 f'$s.WorkingDirectory = "{base_dir}"; '
-                f'$s.IconLocation = "{target}, 0"; '
+                f'$s.IconLocation = "{icon}, 0"; '
                 f'$s.Save()'
             )
             return subprocess.run(["powershell", "-Command", ps], capture_output=True).returncode == 0
