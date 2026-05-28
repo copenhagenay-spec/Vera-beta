@@ -2746,6 +2746,7 @@ def main() -> None:
         target = os.path.join(base_dir, "python", "pythonw.exe")
         arguments = f'"{os.path.join(base_dir, "assistant.py")}"'
         icon = os.path.join(base_dir, "data", "assets", "ipa.ico")
+        # arguments keeps quotes so Windows correctly handles paths with spaces
         try:
             import ctypes.wintypes
             buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
@@ -2761,16 +2762,18 @@ def main() -> None:
         start_menu = os.path.join(start_menu_dir, "SHRA.lnk")
 
         def _make_lnk(dest):
-            ps = (
-                f'$ws = New-Object -ComObject WScript.Shell; '
-                f'$s = $ws.CreateShortcut("{dest}"); '
-                f'$s.TargetPath = "{target}"; '
-                f'$s.Arguments = "{arguments}"; '
-                f'$s.WorkingDirectory = "{base_dir}"; '
-                f'$s.IconLocation = "{icon}, 0"; '
-                f'$s.Save()'
-            )
-            return subprocess.run(["powershell", "-Command", ps], capture_output=True).returncode == 0
+            try:
+                import win32com.client
+                shell = win32com.client.Dispatch("WScript.Shell")
+                s = shell.CreateShortcut(dest)
+                s.TargetPath = target
+                s.Arguments = arguments
+                s.WorkingDirectory = base_dir
+                s.IconLocation = f"{icon}, 0"
+                s.Save()
+                return True
+            except Exception:
+                return False
 
         desktop_ok = _make_lnk(desktop)
         start_ok = _make_lnk(start_menu)
