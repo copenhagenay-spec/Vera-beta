@@ -765,30 +765,13 @@ def main() -> None:
         for alias, target in aliases_cfg.items():
             aliases.append({"alias": str(alias).lower(), "target": str(target).lower()})
 
-    discord_channels = []
-    discord_cfg = cfg.get("discord_channels", {})
-    if isinstance(discord_cfg, dict):
-        # Legacy format: {"channel": "url"}
-        for name, url in discord_cfg.items():
-            discord_channels.append({"name": str(name).lower(), "url": str(url), "server": ""})
-    elif isinstance(discord_cfg, list):
-        for ch in discord_cfg:
-            if isinstance(ch, dict) and ch.get("name") and ch.get("url"):
-                discord_channels.append({
-                    "name": str(ch.get("name", "")).strip().lower(),
-                    "url": str(ch.get("url", "")).strip(),
-                    "server": str(ch.get("server", "")).strip().lower(),
-                })
-
-    discord_servers = []
-    discord_servers_cfg = cfg.get("discord_servers", [])
-    if isinstance(discord_servers_cfg, list):
-        for s in discord_servers_cfg:
-            if isinstance(s, dict) and s.get("nickname"):
-                discord_servers.append({
-                    "nickname": str(s.get("nickname", "")).strip().lower(),
-                    "server_id": str(s.get("server_id", "")).strip(),
-                })
+    discord_aliases = []
+    for a in cfg.get("discord_aliases", []):
+        if isinstance(a, dict) and a.get("nickname") and a.get("username"):
+            discord_aliases.append({
+                "nickname": str(a.get("nickname", "")).strip().lower(),
+                "username": str(a.get("username", "")).strip(),
+            })
 
     keybinds = cfg.get("keybinds", [])
     if not isinstance(keybinds, list):
@@ -813,15 +796,10 @@ def main() -> None:
     app_cmd_var = SimpleVar()
     alias_var = SimpleVar()
     alias_target_var = SimpleVar()
+    discord_alias_nickname_var = SimpleVar()
+    discord_alias_username_var = SimpleVar()
     phrase_var = SimpleVar()
     command_var = SimpleVar()
-    discord_ch_name_var = SimpleVar()
-    discord_ch_url_var = SimpleVar()
-    discord_ch_server_var = SimpleVar()
-    discord_bot_token_var = SimpleVar(value=cfg.get("discord_bot_token", ""))
-    discord_server_id_var = SimpleVar(value=cfg.get("discord_server_id", ""))
-    discord_srv_nickname_var = SimpleVar()
-    discord_srv_id_var = SimpleVar()
     gemini_api_key_var = SimpleVar(value=cfg.get("gemini_api_key", ""))
     keybind_phrase_var = SimpleVar()
     keybind_key_var = SimpleVar()
@@ -863,9 +841,8 @@ def main() -> None:
     _bind_record_key_display(ptt_key, ptt_key_display)
     apps_textbox = None
     aliases_textbox = None
+    discord_aliases_textbox = None
     actions_textbox = None
-    discord_channels_textbox = None
-    discord_servers_textbox = None
     keybinds_textbox = None
     macros_textbox = None
     listener = BackgroundListener()
@@ -946,10 +923,7 @@ def main() -> None:
             "actions": [a for a in actions if a.get("phrase") and a.get("command")],
             "apps": {a.get("name"): a.get("command") for a in apps if a.get("name") and a.get("command")},
             "app_aliases": {a.get("alias"): a.get("target") for a in aliases if a.get("alias") and a.get("target")},
-            "discord_channels": [{"name": a.get("name"), "url": a.get("url"), "server": a.get("server", "")} for a in discord_channels if a.get("name") and a.get("url")],
-            "discord_servers": [s for s in discord_servers if s.get("nickname") and s.get("server_id")],
-            "discord_bot_token": discord_bot_token_var.get().strip(),
-            "discord_server_id": discord_server_id_var.get().strip(),
+            "discord_aliases": [a for a in discord_aliases if a.get("nickname") and a.get("username")],
             "gemini_api_key": gemini_api_key_var.get().strip(),
             "premium": bool(cfg.get("premium", False)),
             "keybinds": [k for k in keybinds if k.get("phrase") and k.get("key")],
@@ -958,6 +932,13 @@ def main() -> None:
             "onboarding_shown": bool(cfg.get("onboarding_shown", False)),
             "premium_onboarding_shown": bool(cfg.get("premium_onboarding_shown", False)),
             "license_key": cfg.get("license_key", ""),
+            # Preserve Spotify tokens — written by spotify.py, must not be wiped on settings save
+            # Load fresh from disk since cfg is a startup snapshot and tokens are written later
+            **{k: load_config().get(k, v) for k, v in {
+                "spotify_access_token": "",
+                "spotify_refresh_token": "",
+                "spotify_token_expiry": 0,
+            }.items()},
         }
         return data
 
@@ -1448,8 +1429,6 @@ def main() -> None:
         news_source.set(saved.get("news_source", "BBC"))
         birthday_month.set(str(saved.get("birthday_month", "") or ""))
         birthday_day.set(str(saved.get("birthday_day", "") or ""))
-        discord_bot_token_var.set(saved.get("discord_bot_token", ""))
-        discord_server_id_var.set(saved.get("discord_server_id", ""))
         gemini_api_key_var.set(saved.get("gemini_api_key", ""))
         bug_report_secret_var.set(saved.get("bug_report_secret", "") or "Z3JlZW5pc2RheQ==")
 
@@ -1473,29 +1452,13 @@ def main() -> None:
             for alias, target in aliases_cfg.items():
                 aliases.append({"alias": str(alias).lower(), "target": str(target).lower()})
 
-        discord_cfg = saved.get("discord_channels", {})
-        discord_channels[:] = []
-        if isinstance(discord_cfg, dict):
-            for name, url in discord_cfg.items():
-                discord_channels.append({"name": str(name).lower(), "url": str(url), "server": ""})
-        elif isinstance(discord_cfg, list):
-            for ch in discord_cfg:
-                if isinstance(ch, dict) and ch.get("name") and ch.get("url"):
-                    discord_channels.append({
-                        "name": str(ch.get("name", "")).strip().lower(),
-                        "url": str(ch.get("url", "")).strip(),
-                        "server": str(ch.get("server", "")).strip().lower(),
-                    })
-
-        discord_servers_cfg = saved.get("discord_servers", [])
-        discord_servers[:] = []
-        if isinstance(discord_servers_cfg, list):
-            for s in discord_servers_cfg:
-                if isinstance(s, dict) and s.get("nickname"):
-                    discord_servers.append({
-                        "nickname": str(s.get("nickname", "")).strip().lower(),
-                        "server_id": str(s.get("server_id", "")).strip(),
-                    })
+        discord_aliases[:] = []
+        for a in saved.get("discord_aliases", []):
+            if isinstance(a, dict) and a.get("nickname") and a.get("username"):
+                discord_aliases.append({
+                    "nickname": str(a.get("nickname", "")).strip().lower(),
+                    "username": str(a.get("username", "")).strip(),
+                })
 
         saved_keybinds = saved.get("keybinds", [])
         if not isinstance(saved_keybinds, list):
@@ -1512,8 +1475,7 @@ def main() -> None:
         _refresh_actions()
         _refresh_apps()
         _refresh_aliases()
-        _refresh_discord_channels()
-        _refresh_discord_servers()
+        _refresh_discord_aliases()
         _refresh_keybinds()
         if callable(_ui_refresh_fn):
             _ui_refresh_fn()
@@ -1898,6 +1860,36 @@ def main() -> None:
         _refresh_aliases()
         _refresh_save_prompt()
 
+    # --- Discord alias helpers ---
+    def _refresh_discord_aliases():
+        if discord_aliases_textbox is None:
+            return
+        discord_aliases_textbox.clear()
+        for a in discord_aliases:
+            discord_aliases_textbox.addItem(f"{a.get('nickname')}  ->  @{a.get('username')}")
+
+    def _add_discord_alias():
+        nickname = discord_alias_nickname_var.get().strip().lower()
+        username = discord_alias_username_var.get().strip()
+        if not nickname or not username:
+            _notify_error("Invalid", "Nickname and Discord username are required.")
+            return
+        discord_aliases.append({"nickname": nickname, "username": username})
+        discord_alias_nickname_var.set("")
+        discord_alias_username_var.set("")
+        _refresh_discord_aliases()
+        _refresh_save_prompt()
+
+    def _remove_discord_alias():
+        if not discord_aliases:
+            return
+        row = discord_aliases_textbox.currentRow() if discord_aliases_textbox else -1
+        idx = row if row >= 0 else len(discord_aliases) - 1
+        if 0 <= idx < len(discord_aliases):
+            discord_aliases.pop(idx)
+        _refresh_discord_aliases()
+        _refresh_save_prompt()
+
     def _add_app():
         name = app_name_var.get().strip().lower()
         command = app_cmd_var.get().strip()
@@ -1928,68 +1920,6 @@ def main() -> None:
         if 0 <= idx < len(apps):
             apps.pop(idx)
         _refresh_apps()
-        _refresh_save_prompt()
-
-    # --- Discord servers helpers ---
-    def _refresh_discord_servers():
-        if discord_servers_textbox is None:
-            return
-        discord_servers_textbox.clear()
-        for s in discord_servers:
-            discord_servers_textbox.addItem(f"{s.get('nickname')}  ->  {s.get('server_id')}")
-
-    def _add_discord_server():
-        nickname = discord_srv_nickname_var.get().strip().lower()
-        server_id = discord_srv_id_var.get().strip()
-        if not nickname or not server_id:
-            _notify_error("Invalid", "Nickname and Server ID are required.")
-            return
-        discord_servers.append({"nickname": nickname, "server_id": server_id})
-        discord_srv_nickname_var.set("")
-        discord_srv_id_var.set("")
-        _refresh_discord_servers()
-        _refresh_save_prompt()
-
-    def _remove_discord_server():
-        if discord_servers_textbox is None or not discord_servers:
-            return
-        row = discord_servers_textbox.currentRow()
-        idx = row if row >= 0 else len(discord_servers) - 1
-        discord_servers.pop(idx)
-        _refresh_discord_servers()
-        _refresh_save_prompt()
-
-    # --- Discord channels helpers ---
-    def _refresh_discord_channels():
-        if discord_channels_textbox is None:
-            return
-        discord_channels_textbox.clear()
-        for ch in discord_channels:
-            server = ch.get("server", "")
-            prefix = f"[{server}] " if server else ""
-            discord_channels_textbox.addItem(f"{prefix}#{ch.get('name')}  ->  {ch.get('url')}")
-
-    def _add_discord_channel():
-        name = discord_ch_name_var.get().strip().lower()
-        url = discord_ch_url_var.get().strip()
-        server = discord_ch_server_var.get().strip().lower()
-        if not name or not url:
-            _notify_error("Invalid", "Channel name and webhook URL are required.")
-            return
-        discord_channels.append({"name": name, "url": url, "server": server})
-        discord_ch_name_var.set("")
-        discord_ch_url_var.set("")
-        discord_ch_server_var.set("")
-        _refresh_discord_channels()
-        _refresh_save_prompt()
-
-    def _remove_discord_channel():
-        if discord_channels_textbox is None or not discord_channels:
-            return
-        row = discord_channels_textbox.currentRow()
-        idx = row if row >= 0 else len(discord_channels) - 1
-        discord_channels.pop(idx)
-        _refresh_discord_channels()
         _refresh_save_prompt()
 
     # --- Keybinds helpers ---
@@ -2832,15 +2762,10 @@ def main() -> None:
         "app_cmd_var": app_cmd_var,
         "alias_var": alias_var,
         "alias_target_var": alias_target_var,
+        "discord_alias_nickname_var": discord_alias_nickname_var,
+        "discord_alias_username_var": discord_alias_username_var,
         "phrase_var": phrase_var,
         "command_var": command_var,
-        "discord_ch_name_var": discord_ch_name_var,
-        "discord_ch_url_var": discord_ch_url_var,
-        "discord_ch_server_var": discord_ch_server_var,
-        "discord_srv_nickname_var": discord_srv_nickname_var,
-        "discord_srv_id_var": discord_srv_id_var,
-        "discord_bot_token_var": discord_bot_token_var,
-        "discord_server_id_var": discord_server_id_var,
         "gemini_api_key_var": gemini_api_key_var,
         "keybind_phrase_var": keybind_phrase_var,
         "keybind_key_var": keybind_key_var,
@@ -2870,14 +2795,12 @@ def main() -> None:
         "test_app": _test_app,
         "add_alias": _add_alias,
         "remove_alias": _remove_alias,
+        "add_discord_alias": _add_discord_alias,
+        "remove_discord_alias": _remove_discord_alias,
         "add_action": _add_action,
         "remove_action": _remove_action,
         "record_hotkey": _record_hotkey,
         "record_hold_key": _record_hold_key,
-        "add_discord_channel": _add_discord_channel,
-        "remove_discord_channel": _remove_discord_channel,
-        "add_discord_server": _add_discord_server,
-        "remove_discord_server": _remove_discord_server,
         "add_keybind": _add_keybind,
         "remove_keybind": _remove_keybind,
         "record_keybind_key": _record_keybind_step,
@@ -2925,10 +2848,9 @@ def main() -> None:
 
     apps_textbox = widgets.get("apps_textbox")
     aliases_textbox = widgets.get("aliases_textbox")
+    discord_aliases_textbox = widgets.get("discord_aliases_textbox")
     actions_textbox = widgets.get("actions_textbox")
     history_textbox = widgets.get("history_textbox")
-    discord_channels_textbox = widgets.get("discord_channels_textbox")
-    discord_servers_textbox = widgets.get("discord_servers_textbox")
     keybinds_textbox = widgets.get("keybinds_textbox")
     macros_textbox   = widgets.get("macros_textbox")
     save_button = widgets.get("save_button")
@@ -3050,8 +2972,7 @@ def main() -> None:
     _refresh_actions()
     _refresh_apps()
     _refresh_aliases()
-    _refresh_discord_channels()
-    _refresh_discord_servers()
+    _refresh_discord_aliases()
     _refresh_keybinds()
     _refresh_macros()
     _saved_config_signature[0] = _config_signature()
@@ -3074,8 +2995,6 @@ def main() -> None:
         news_source,
         birthday_month,
         birthday_day,
-        discord_bot_token_var,
-        discord_server_id_var,
         gemini_api_key_var,
     ):
         _var.trace_add("write", _refresh_save_prompt)

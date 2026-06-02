@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.99.9.8 — The Social Update
+- Added: Discord send — say "discord [channel] [message]" to send a message to any channel or DM without leaving your game. No webhook setup required.
+- Added: Discord DM contacts — add spoken nicknames mapped to Discord usernames in the new Discord settings tab. Say "discord dm [nickname] [message]" to message anyone by their alias.
+- Added: Discord read (Elite) — say "discord read [channel/nickname]" to have SH|RA navigate to a conversation, screenshot it, and read the last message aloud using LLM vision analysis.
+- Fixed: Macros using extended keys (Windows key, arrow keys, Insert, Delete, Home, End, Page Up/Down) now fire correctly. Root cause was missing KEYEVENTF_EXTENDEDKEY flag in SendInput.
+- Fixed: Star Citizen voice keybinds now fire correctly. Switched from keybd_event to SendInput with hardware scan codes via MapVirtualKeyW.
+- Removed: Discord webhook and bot API features — replaced by keyboard automation that works in any server without admin setup.
+
 ## 0.99.9.7 — Organic Memory & Tier System
 - Added: Organic memory system — SH|RA now silently learns personal facts from natural conversation without requiring explicit "remember" commands. Powered by LLM detection with regex fallback when no API key is active.
 - Added: LLM-driven memory forgetting — say "forget that thing about X" naturally and SH|RA finds the right memory from context and removes it. No exact command required.

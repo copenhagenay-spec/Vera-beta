@@ -1107,10 +1107,8 @@ def _show_help() -> None:
         "",
         "Discord:",
         "  discord <channel> <message>",
-        "  discord <server> <channel> <message>",
-        "  read discord <channel>",
-        "  discord delete <channel>",
-        "  discord purge <channel> <n>",
+        "  discord dm <nickname> <message>",
+        "  discord read <channel/nickname>  [Elite]",
         "",
         "AI:",
         "  ask <question>",
@@ -1220,10 +1218,8 @@ def _show_help() -> None:
         ]),
         ("Discord", [
             "discord <channel> <message>",
-            "discord <server> <channel> <message>",
-            "read discord <channel>",
-            "discord delete <channel>",
-            "discord purge <channel> <n>",
+            "discord dm <nickname> <message>",
+            "discord read <channel/nickname>  [Plus+]",
         ]),
         ("AI", [
             "ask <question>",
@@ -1457,19 +1453,65 @@ def _press_key(key: str, count: int = 1) -> bool:
                 for mod in reversed(modifiers):
                     kb_ctl.release(mod)
             else:
-                import win32api, win32con
+                import ctypes
+                from ctypes import wintypes
                 vk = _get_vk(resolved[1])
                 if vk:
                     mod_vks = [_get_vk(m) for m in modifiers]
+
+                    # SendInput with scan codes — required for games using raw/direct input (SC, EAC)
+                    class _KEYBDINPUT(ctypes.Structure):
+                        _fields_ = [
+                            ("wVk",         wintypes.WORD),
+                            ("wScan",       wintypes.WORD),
+                            ("dwFlags",     wintypes.DWORD),
+                            ("time",        wintypes.DWORD),
+                            ("dwExtraInfo", ctypes.c_size_t),
+                        ]
+                    class _INPUTunion(ctypes.Union):
+                        _fields_ = [("ki", _KEYBDINPUT), ("_pad", ctypes.c_byte * 28)]
+                    class _INPUT(ctypes.Structure):
+                        _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
+
+                    _u32 = ctypes.windll.user32
+                    _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
+                    _u32.SendInput.restype  = ctypes.c_uint
+
+                    KEYEVENTF_SCANCODE   = 0x0008
+                    KEYEVENTF_KEYUP      = 0x0002
+                    KEYEVENTF_EXTENDEDKEY = 0x0001
+                    # Extended keys require KEYEVENTF_EXTENDEDKEY with scan code injection
+                    _EXTENDED_VKS = {
+                        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,  # PgUp/Dn, End, Home, arrows
+                        0x2D, 0x2E,           # Insert, Delete
+                        0x5B, 0x5C, 0x5D,    # LWin, RWin, Apps
+                        0x6F,                 # Numpad divide
+                        0xA1, 0xA3, 0xA5,    # Right Shift, Ctrl, Alt
+                    }
+
+                    def _send_sc(v, keyup=False):
+                        sc = _u32.MapVirtualKeyW(v, 0)
+                        flags = KEYEVENTF_SCANCODE
+                        if v in _EXTENDED_VKS:
+                            flags |= KEYEVENTF_EXTENDEDKEY
+                        if keyup:
+                            flags |= KEYEVENTF_KEYUP
+                        inp = _INPUT()
+                        inp.type = 1
+                        inp.u.ki.wVk    = 0
+                        inp.u.ki.wScan  = sc
+                        inp.u.ki.dwFlags = flags
+                        _u32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT))
+
                     for mv in mod_vks:
                         if mv:
-                            win32api.keybd_event(mv, 0, 0, 0)
-                    win32api.keybd_event(vk, 0, 0, 0)
+                            _send_sc(mv)
+                    _send_sc(vk)
                     time.sleep(0.05)
-                    win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    _send_sc(vk, keyup=True)
                     for mv in reversed(mod_vks):
                         if mv:
-                            win32api.keybd_event(mv, 0, win32con.KEYEVENTF_KEYUP, 0)
+                            _send_sc(mv, keyup=True)
                 else:
                     kb_ctl = _kb.Controller()
                     for mod in modifiers:
@@ -1663,273 +1705,384 @@ def _ask_ai(question: str) -> bool:
     return True
 
 
-def _discord_read(channel_name: str, server_name: str = "") -> bool:
-    cfg = load_config()
-    token = cfg.get("discord_bot_token", "").strip()
-
-    # Resolve server_id — check discord_servers list first, fall back to legacy single server_id
-    guild_id = ""
-    if server_name:
-        servers = cfg.get("discord_servers", [])
-        norm = _normalize_name(server_name)
-        for s in servers:
-            if isinstance(s, dict) and _normalize_name(s.get("nickname", "")) == norm:
-                guild_id = str(s.get("server_id", "")).strip()
-                break
-    if not guild_id:
-        guild_id = cfg.get("discord_server_id", "").strip()
-
-    if not token:
-        print("Discord bot token not configured.")
-        _log_event("DISCORD_READ_FAILED: no bot token")
-        return False
-    if not guild_id:
-        print("Discord server ID not configured.")
-        _log_event("DISCORD_READ_FAILED: no server ID")
-        return False
-
+def _discord_ocr_last_message(hwnd: int) -> str | None:
+    """Screenshot Discord message area, OCR it, return last message text or None."""
     try:
-        import json
-        import urllib.request
-        import urllib.error
+        import io
+        import ctypes
+        from PIL import Image
+        import win32gui
 
-        headers = {
-            "Authorization": f"Bot {token}",
-            "User-Agent": "SHRA/1.0",
-        }
+        import win32ui
+        import win32con as _wc
 
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/guilds/{guild_id}/channels",
-            headers=headers,
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            channels = json.loads(resp.read().decode("utf-8"))
+        rect = win32gui.GetWindowRect(hwnd)
+        w = rect[2] - rect[0]
+        h = rect[3] - rect[1]
+        _log_event(f"DISCORD_OCR: window rect {rect}, size {w}x{h}")
 
-        channel_id = None
-        for ch in channels:
-            if ch.get("type") == 0 and ch.get("name", "").lower() == channel_name.lower():
-                channel_id = ch["id"]
-                break
+        # Capture via PrintWindow (PW_RENDERFULLCONTENT=2) — works with GPU/Electron apps
+        hwnd_dc  = win32gui.GetWindowDC(hwnd)
+        mfc_dc   = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc  = mfc_dc.CreateCompatibleDC()
+        bmp      = win32ui.CreateBitmap()
+        bmp.CreateCompatibleBitmap(mfc_dc, w, h)
+        save_dc.SelectObject(bmp)
+        ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 2)
+        bmp_info = bmp.GetInfo()
+        bmp_bits = bmp.GetBitmapBits(True)
+        win32gui.DeleteObject(bmp.GetHandle())
+        save_dc.DeleteDC()
+        mfc_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
 
-        if not channel_id:
-            _log_event(f"DISCORD_READ_FAILED: channel not found: {channel_name}")
-            _tts_speak(f"Channel {channel_name} not found.")
-            return False
+        full_img = Image.frombuffer("RGB", (bmp_info["bmWidth"], bmp_info["bmHeight"]), bmp_bits, "raw", "BGRX", 0, 1)
 
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/channels/{channel_id}/messages?limit=1",
-            headers=headers,
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            messages = json.loads(resp.read().decode("utf-8"))
+        # Crop to message area — skip sidebar (~33%), top bar (~7%), bottom bar (~10%), right panel (~25%)
+        cw, ch = full_img.size
+        crop = (int(cw * 0.33), int(ch * 0.07), int(cw * 0.75), int(ch * 0.90))
+        img = full_img.crop(crop)
+        _log_event(f"DISCORD_OCR: cropped to {crop}, img size {img.size}")
 
-        if not messages:
-            _tts_speak(f"No messages in {channel_name}.")
-            return True
-
-        msg = messages[0]
-        author = msg.get("author", {}).get("username", "Unknown")
-        content = msg.get("content", "").strip()
-
-        if not content:
-            _tts_speak(f"Last message in {channel_name} has no text.")
-            return True
-
-        _tts_speak(f"{author} said: {content}")
-        _log_event(f"DISCORD_READ: #{channel_name}: {author}: {content}")
-        return True
-
-    except urllib.error.HTTPError as exc:
+        # Save debug screenshot to logs
         try:
-            body = exc.read().decode("utf-8")
+            dbg_path = os.path.join(os.path.dirname(__file__), "data", "logs", "discord_ocr_debug.png")
+            os.makedirs(os.path.dirname(dbg_path), exist_ok=True)
+            img.save(dbg_path)
+            _log_event(f"DISCORD_OCR: debug image saved to {dbg_path}")
         except Exception:
-            body = "(no body)"
-        print(f"Failed to read Discord: {exc} — {body}")
-        _log_event(f"DISCORD_READ_FAILED: {exc} — {body}")
-        return False
-    except Exception as exc:
-        print(f"Failed to read Discord: {exc}")
-        _log_event(f"DISCORD_READ_FAILED: {exc}")
-        return False
+            pass
 
+        # Encode to PNG bytes for WinRT stream
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        png_bytes = buf.getvalue()
+        _log_event(f"DISCORD_OCR: PNG size {len(png_bytes)} bytes")
 
-def _resolve_discord_webhook(channel_name: str, server_name: str = "") -> str:
-    """Find webhook URL for a channel, optionally filtered by server nickname."""
-    cfg = load_config()
-    channels_cfg = cfg.get("discord_channels", {})
+        # Send screenshot to LLM for vision analysis
+        import base64
+        import json as _json
+        import urllib.request as _ureq
+        import urllib.error as _uerr
 
-    # Normalize to list format
-    if isinstance(channels_cfg, dict):
-        channels = [{"name": k.lower(), "url": v, "server": ""} for k, v in channels_cfg.items()]
-    elif isinstance(channels_cfg, list):
-        channels = channels_cfg
-    else:
-        channels = []
+        buf2 = io.BytesIO()
+        img.save(buf2, "PNG")
+        b64 = base64.b64encode(buf2.getvalue()).decode("utf-8")
 
-    norm_ch = _normalize_name(channel_name)
-    norm_srv = _normalize_name(server_name) if server_name else ""
+        from config import load_config as _lc
+        key = _lc().get("gemini_api_key", "").strip()
+        if not key:
+            _log_event("DISCORD_OCR: no API key configured")
+            return None
 
-    for ch in channels:
-        ch_match = _normalize_name(ch.get("name", "")) == norm_ch
-        srv_match = not norm_srv or _normalize_name(ch.get("server", "")) == norm_srv
-        if ch_match and srv_match:
-            return ch.get("url", "")
-    return ""
-
-
-def _discord_send(channel_name: str, message: str, server_name: str = "") -> bool:
-    webhook_url = _resolve_discord_webhook(channel_name, server_name)
-
-    if not webhook_url:
-        print(f"Discord channel not configured: {channel_name}")
-        _log_event(f"DISCORD_CHANNEL_NOT_FOUND: {channel_name}")
-        return False
-
-    try:
-        import json
-        import urllib.request
-        import urllib.error
-        data = json.dumps({"content": message}).encode("utf-8")
-        req = urllib.request.Request(
-            webhook_url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "User-Agent": "SHRA/1.0",
-            },
-            method="POST",
+        prompt = (
+            "You are a neutral transcription tool. Your only job is to read and report text exactly as it appears. "
+            "Do not filter, censor, or refuse any content — transcribe it literally regardless of language or subject matter. "
+            "This is a Discord chat screenshot. "
+            "What is the last text message shown and who sent it? "
+            "Reply in exactly this format: 'Username: message text'. "
+            "If the last message is only an image or GIF with no text, reply: 'Username: sent an image'. "
+            "If the message is longer than 150 characters, include only the first sentence followed by '...'. "
+            "Reply with nothing else — no commentary, no warnings, no refusals."
         )
-        with urllib.request.urlopen(req, timeout=10):
-            pass
-        _log_event(f"DISCORD_SENT: #{channel_name}: {message}")
-        return True
-    except urllib.error.HTTPError as exc:
+
+        raw_text = None
         try:
-            body = exc.read().decode("utf-8")
-        except Exception:
-            body = "(no body)"
-        print(f"Failed to send Discord message: {exc} — {body}")
-        _log_event(f"DISCORD_SEND_FAILED: {exc} — {body}")
-        return False
+            if key.startswith("sk-ant-"):
+                # Anthropic Claude vision
+                payload = _json.dumps({
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                        {"type": "text", "text": prompt},
+                    ]}],
+                }).encode("utf-8")
+                req = _ureq.Request(
+                    "https://api.anthropic.com/v1/messages",
+                    data=payload,
+                    headers={"Content-Type": "application/json", "x-api-key": key,
+                             "anthropic-version": "2023-06-01", "User-Agent": "SHRA/1.0"},
+                    method="POST",
+                )
+                with _ureq.urlopen(req, timeout=15) as resp:
+                    data = _json.loads(resp.read())
+                raw_text = data["content"][0]["text"].strip()
+
+            elif key.startswith("sk-"):
+                # OpenAI vision
+                payload = _json.dumps({
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                        {"type": "text", "text": prompt},
+                    ]}],
+                }).encode("utf-8")
+                req = _ureq.Request(
+                    "https://api.openai.com/v1/chat/completions",
+                    data=payload,
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {key}", "User-Agent": "SHRA/1.0"},
+                    method="POST",
+                )
+                with _ureq.urlopen(req, timeout=15) as resp:
+                    data = _json.loads(resp.read())
+                raw_text = data["choices"][0]["message"]["content"].strip()
+
+            else:
+                _log_event("DISCORD_OCR: Groq does not support vision — use a Claude or OpenAI key")
+                return None
+
+        except Exception as exc:
+            _log_event(f"DISCORD_OCR: LLM call failed: {exc}")
+            return None
+
+        _log_event(f"DISCORD_OCR: LLM response: {repr(raw_text)}")
+        if not raw_text:
+            return None
+
+        # If LLM refused or returned something that doesn't match expected format, fall back gracefully
+        if not re.match(r'^.+:.+', raw_text):
+            return "Last message couldn't be read."
+
+        # Strip URLs — not useful to read aloud
+        raw_text = re.sub(r'https?://\S+', '[link]', raw_text).strip()
+        # If all that's left is "Username: [link]" say "sent a link" instead
+        if re.match(r'^.+:\s*\[link\]$', raw_text):
+            username = raw_text.split(":")[0].strip()
+            raw_text = f"{username}: sent a link"
+        return raw_text
+
     except Exception as exc:
-        print(f"Failed to send Discord message: {exc}")
-        _log_event(f"DISCORD_SEND_FAILED: {exc}")
-        return False
+        _log_event(f"DISCORD_OCR_FAILED: {exc}")
+        return None
 
 
-def _discord_delete_last(channel_name: str) -> bool:
-    cfg = load_config()
-    token = cfg.get("discord_bot_token", "").strip()
-    guild_id = cfg.get("discord_server_id", "").strip()
-    if not token or not guild_id:
-        _tts_speak("Discord bot token or server ID not configured.")
-        return False
+def _discord_read_keyboard(target: str) -> bool:
+    """Navigate to a Discord DM or channel and read the last message via OCR."""
     try:
-        import json, urllib.request, urllib.error
-        headers = {"Authorization": f"Bot {token}", "User-Agent": "SHRA/1.0"}
-
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            channels = json.loads(resp.read().decode("utf-8"))
-        channel_id = next(
-            (ch["id"] for ch in channels
-             if ch.get("type") == 0 and ch.get("name", "").lower() == channel_name.lower()),
-            None)
-        if not channel_id:
-            _tts_speak(f"Channel {channel_name} not found.")
-            return False
-
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/channels/{channel_id}/messages?limit=1",
-            headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            messages = json.loads(resp.read().decode("utf-8"))
-        if not messages:
-            _tts_speak(f"No messages to delete in {channel_name}.")
+        from license import get_tier
+        if get_tier() == "free":
+            _tts_speak("Discord message reading requires a Plus license or higher.")
             return True
 
-        msg_id = messages[0]["id"]
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/channels/{channel_id}/messages/{msg_id}",
-            headers=headers, method="DELETE")
-        with urllib.request.urlopen(req, timeout=10):
-            pass
-        _tts_speak(f"Last message in {channel_name} deleted.")
-        _log_event(f"DISCORD_DELETE: #{channel_name} msg {msg_id}")
-        return True
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8") if hasattr(exc, "read") else ""
-        _log_event(f"DISCORD_DELETE_FAILED: {exc} — {body}")
-        _tts_speak("Failed to delete message. Check bot permissions.")
-        return False
-    except Exception as exc:
-        _log_event(f"DISCORD_DELETE_FAILED: {exc}")
-        return False
+        import ctypes
+        from ctypes import wintypes
+        import win32clipboard
+        import win32gui
+        import win32con
 
+        # ---- SendInput helpers (same as send) ----
+        class _KEYBDINPUT(ctypes.Structure):
+            _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                        ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                        ("dwExtraInfo", ctypes.c_size_t)]
+        class _INPUTunion(ctypes.Union):
+            _fields_ = [("ki", _KEYBDINPUT), ("_pad", ctypes.c_byte * 28)]
+        class _INPUT(ctypes.Structure):
+            _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
 
-def _discord_purge(channel_name: str, count: int) -> bool:
-    cfg = load_config()
-    token = cfg.get("discord_bot_token", "").strip()
-    guild_id = cfg.get("discord_server_id", "").strip()
-    if not token or not guild_id:
-        _tts_speak("Discord bot token or server ID not configured.")
-        return False
-    count = max(1, min(count, 100))
-    try:
-        import json, urllib.request, urllib.error
-        headers = {
-            "Authorization": f"Bot {token}",
-            "User-Agent": "SHRA/1.0",
-            "Content-Type": "application/json",
-        }
+        _u32 = ctypes.windll.user32
+        _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
+        _u32.SendInput.restype  = ctypes.c_uint
 
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            channels = json.loads(resp.read().decode("utf-8"))
-        channel_id = next(
-            (ch["id"] for ch in channels
-             if ch.get("type") == 0 and ch.get("name", "").lower() == channel_name.lower()),
-            None)
-        if not channel_id:
-            _tts_speak(f"Channel {channel_name} not found.")
-            return False
+        def _send_sc(vk, keyup=False):
+            sc = _u32.MapVirtualKeyW(vk, 0)
+            inp = _INPUT()
+            inp.type = 1
+            inp.u.ki.wVk    = 0
+            inp.u.ki.wScan  = sc
+            inp.u.ki.dwFlags = 0x0008 | (0x0002 if keyup else 0)
+            _u32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT))
 
-        req = urllib.request.Request(
-            f"https://discord.com/api/v10/channels/{channel_id}/messages?limit={count}",
-            headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            messages = json.loads(resp.read().decode("utf-8"))
-        if not messages:
-            _tts_speak(f"No messages to delete in {channel_name}.")
+        def _tap(vk):
+            _send_sc(vk);       time.sleep(0.04)
+            _send_sc(vk, True); time.sleep(0.04)
+
+        def _chord(mod, key):
+            _send_sc(mod);        time.sleep(0.02)
+            _send_sc(key);        time.sleep(0.04)
+            _send_sc(key, True);  time.sleep(0.02)
+            _send_sc(mod, True);  time.sleep(0.04)
+
+        VK_CTRL   = 0x11
+        VK_K      = 0x4B
+        VK_V      = 0x56
+        VK_RETURN = 0x0D
+
+        # ---- Find Discord window ----
+        discord_hwnd = None
+        def _enum_cb(hwnd, _):
+            nonlocal discord_hwnd
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                cls   = win32gui.GetClassName(hwnd)
+                if "discord" in title.lower() and cls == "Chrome_WidgetWin_1":
+                    discord_hwnd = hwnd
+        win32gui.EnumWindows(_enum_cb, None)
+
+        if not discord_hwnd:
+            _tts_speak("Discord isn't open.")
             return True
 
-        msg_ids = [m["id"] for m in messages]
-        if len(msg_ids) == 1:
-            req = urllib.request.Request(
-                f"https://discord.com/api/v10/channels/{channel_id}/messages/{msg_ids[0]}",
-                headers=headers, method="DELETE")
-            with urllib.request.urlopen(req, timeout=10):
+        prev_hwnd = win32gui.GetForegroundWindow()
+        win32gui.ShowWindow(discord_hwnd, win32con.SW_RESTORE)
+        ctypes.windll.user32.keybd_event(0, 0, 0, 0)  # grants foreground permission
+        win32gui.SetForegroundWindow(discord_hwnd)
+        time.sleep(0.5)
+
+        # ---- Navigate to target ----
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(target, win32clipboard.CF_UNICODETEXT)
+        win32clipboard.CloseClipboard()
+
+        _chord(VK_CTRL, VK_K)
+        time.sleep(0.3)
+        _chord(VK_CTRL, VK_V)
+        time.sleep(0.5)
+        _tap(VK_RETURN)
+        time.sleep(0.8)  # wait longer for channel to load before screenshot
+
+        # ---- OCR the message area ----
+        result = _discord_ocr_last_message(discord_hwnd)
+
+        # ---- Restore focus ----
+        if prev_hwnd and prev_hwnd != discord_hwnd:
+            try:
+                win32gui.SetForegroundWindow(prev_hwnd)
+            except Exception:
                 pass
+
+        if result:
+            _tts_speak(result)
+            _log_event(f"DISCORD_READ: {target}: {result}")
         else:
-            data = json.dumps({"messages": msg_ids}).encode("utf-8")
-            req = urllib.request.Request(
-                f"https://discord.com/api/v10/channels/{channel_id}/messages/bulk-delete",
-                data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=10):
-                pass
-        _tts_speak(f"Deleted {len(msg_ids)} messages from {channel_name}.")
-        _log_event(f"DISCORD_PURGE: #{channel_name} x{len(msg_ids)}")
+            _tts_speak("Couldn't read the last message.")
+
         return True
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8") if hasattr(exc, "read") else ""
-        _log_event(f"DISCORD_PURGE_FAILED: {exc} — {body}")
-        _tts_speak("Failed to purge messages. Check bot permissions.")
-        return False
+
     except Exception as exc:
-        _log_event(f"DISCORD_PURGE_FAILED: {exc}")
+        _log_event(f"DISCORD_READ_FAILED: {exc}")
+        _tts_speak("Failed to read Discord messages.")
+        return True
+
+
+def _discord_send_keyboard(channel_name: str, message: str) -> bool:
+    try:
+        import ctypes
+        from ctypes import wintypes
+        import win32gui
+        import win32con
+
+        # ---- SendInput helpers ----
+        class _KEYBDINPUT(ctypes.Structure):
+            _fields_ = [
+                ("wVk",         wintypes.WORD),
+                ("wScan",       wintypes.WORD),
+                ("dwFlags",     wintypes.DWORD),
+                ("time",        wintypes.DWORD),
+                ("dwExtraInfo", ctypes.c_size_t),
+            ]
+        class _INPUTunion(ctypes.Union):
+            _fields_ = [("ki", _KEYBDINPUT), ("_pad", ctypes.c_byte * 28)]
+        class _INPUT(ctypes.Structure):
+            _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
+
+        _u32 = ctypes.windll.user32
+        _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
+        _u32.SendInput.restype  = ctypes.c_uint
+
+        KEYEVENTF_SCANCODE = 0x0008
+        KEYEVENTF_KEYUP    = 0x0002
+
+        def _send_sc(vk, keyup=False):
+            sc = _u32.MapVirtualKeyW(vk, 0)
+            inp = _INPUT()
+            inp.type = 1
+            inp.u.ki.wVk    = 0
+            inp.u.ki.wScan  = sc
+            inp.u.ki.dwFlags = KEYEVENTF_SCANCODE | (KEYEVENTF_KEYUP if keyup else 0)
+            _u32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT))
+
+        def _tap(vk):
+            _send_sc(vk);       time.sleep(0.04)
+            _send_sc(vk, True); time.sleep(0.04)
+
+        def _chord(mod, key):
+            _send_sc(mod);        time.sleep(0.02)
+            _send_sc(key);        time.sleep(0.04)
+            _send_sc(key, True);  time.sleep(0.02)
+            _send_sc(mod, True);  time.sleep(0.04)
+
+        VK_CTRL   = 0x11
+        VK_K      = 0x4B
+        VK_V      = 0x56
+        VK_RETURN = 0x0D
+
+        # ---- Clipboard helper ----
+        def _set_clipboard(text: str):
+            import win32clipboard
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+            win32clipboard.CloseClipboard()
+
+        # ---- Find Discord window ----
+        discord_hwnd = None
+        def _enum_cb(hwnd, _):
+            nonlocal discord_hwnd
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                cls   = win32gui.GetClassName(hwnd)
+                if "discord" in title.lower() and cls == "Chrome_WidgetWin_1":
+                    discord_hwnd = hwnd
+        win32gui.EnumWindows(_enum_cb, None)
+
+        if not discord_hwnd:
+            _tts_speak("Discord isn't open.")
+            return False
+
+        # ---- Save foreground window, bring Discord up ----
+        prev_hwnd = win32gui.GetForegroundWindow()
+        win32gui.ShowWindow(discord_hwnd, win32con.SW_RESTORE)
+        win32gui.SetForegroundWindow(discord_hwnd)
+        time.sleep(0.5)
+
+        # ---- Ctrl+K → paste channel → Enter ----
+        _chord(VK_CTRL, VK_K)
+        time.sleep(0.3)
+        _set_clipboard(channel_name)
+        _chord(VK_CTRL, VK_V)
+        time.sleep(0.5)
+        _tap(VK_RETURN)
+        time.sleep(0.6)
+
+        # ---- Paste message → Enter ----
+        _set_clipboard(message)
+        _chord(VK_CTRL, VK_V)
+        time.sleep(0.15)
+        _tap(VK_RETURN)
+        time.sleep(0.2)
+
+        # ---- Restore focus ----
+        if prev_hwnd and prev_hwnd != discord_hwnd:
+            try:
+                win32gui.SetForegroundWindow(prev_hwnd)
+            except Exception:
+                pass
+
+        _log_event(f"DISCORD_SENT: #{channel_name}: {message}")
+        _tts_speak(f"Sent to {channel_name}.")
+        return True
+
+    except Exception as exc:
+        _log_event(f"DISCORD_SEND_FAILED: {exc}")
+        _tts_speak("Failed to send Discord message.")
         return False
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -2331,50 +2484,55 @@ def _ih_type(m, t, allow_prompt, confirm_fn, restart_fn):
     return True
 
 
-# --- Discord read (server + channel OR channel only) ---
-@_intent(812, r"\bread\s+discord\s+(\w+)\s+(\w+)\b")
-def _ih_discord_read_server(m, t, allow_prompt, confirm_fn, restart_fn):
-    # "read discord <server> <channel>"
-    threading.Thread(target=_discord_read, args=(m.group(2).strip(), m.group(1).strip()), daemon=True).start()
-    return True
-
-@_intent(810, r"\bread\s+discord\s+(\w+)\b")
+# --- Discord read ---
+@_intent(804, r"\bdiscord\s+read\s+(.+)$")
 def _ih_discord_read(m, t, allow_prompt, confirm_fn, restart_fn):
-    # "read discord <channel>"
-    threading.Thread(target=_discord_read, args=(m.group(1).strip(),), daemon=True).start()
-    return True
-
-
-# --- Discord delete last ---
-@_intent(808, r"\bdiscord\s+delete\s+(\w+)\b")
-def _ih_discord_delete(m, t, allow_prompt, confirm_fn, restart_fn):
-    threading.Thread(target=_discord_delete_last, args=(m.group(1).strip(),), daemon=True).start()
-    return True
-
-
-# --- Discord purge ---
-@_intent(806, r"\bdiscord\s+purge\s+(\w+)\s+(\d+)\b")
-def _ih_discord_purge(m, t, allow_prompt, confirm_fn, restart_fn):
-    threading.Thread(target=_discord_purge, args=(m.group(1).strip(), int(m.group(2))), daemon=True).start()
-    return True
-
-
-# --- Discord send (server + channel + message OR channel + message) ---
-@_intent(802, r"\bdiscord\s+(\w+)\s+(\w+)\s+(.+)$")
-def _ih_discord_send_server(m, t, allow_prompt, confirm_fn, restart_fn):
-    # "discord <server> <channel> <message>" — verify server exists first
+    target = m.group(1).strip()
     cfg = load_config()
-    servers = cfg.get("discord_servers", [])
-    server_names = [s.get("nickname", "").lower() for s in servers if isinstance(s, dict)]
-    if _normalize_name(m.group(1).strip()) in [_normalize_name(s) for s in server_names]:
-        _discord_send(m.group(2).strip(), m.group(3).strip(), m.group(1).strip())
-        return True
-    return False  # fall through to channel-only handler
+    search = target
+    for a in cfg.get("discord_aliases", []):
+        if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
+            search = f"@{a.get('username', target)}"
+            break
+    threading.Thread(target=_discord_read_keyboard, args=(search,), daemon=True).start()
+    return True
 
+
+# --- Discord DM ---
+@_intent(802, r"\bdiscord\s+dm\s+(\w+)\s+(.+)$")
+def _ih_discord_dm(m, t, allow_prompt, confirm_fn, restart_fn):
+    from license import get_tier
+    if get_tier() == "free":
+        _tts_speak("Discord features require a Plus license or higher.")
+        return True
+    nickname = m.group(1).strip()
+    message  = m.group(2).strip()
+    cfg = load_config()
+    aliases = cfg.get("discord_aliases", [])
+    username = nickname
+    for a in aliases:
+        if _normalize_name(a.get("nickname", "")) == _normalize_name(nickname):
+            username = a.get("username", nickname)
+            break
+    threading.Thread(target=_discord_send_keyboard, args=(f"@{username}", message), daemon=True).start()
+    return True
+
+# --- Discord send (channel or aliased DM) ---
 @_intent(800, r"\bdiscord\s+(\w+)\s+(.+)$")
 def _ih_discord_send(m, t, allow_prompt, confirm_fn, restart_fn):
-    # "discord <channel> <message>"
-    _discord_send(m.group(1).strip(), m.group(2).strip())
+    from license import get_tier
+    if get_tier() == "free":
+        _tts_speak("Discord features require a Plus license or higher.")
+        return True
+    target  = m.group(1).strip()
+    message = m.group(2).strip()
+    cfg = load_config()
+    search = target
+    for a in cfg.get("discord_aliases", []):
+        if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
+            search = f"@{a.get('username', target)}"
+            break
+    threading.Thread(target=_discord_send_keyboard, args=(search, message), daemon=True).start()
     return True
 
 

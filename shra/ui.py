@@ -501,15 +501,10 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     app_cmd_var     = state["app_cmd_var"]
     alias_var       = state["alias_var"]
     alias_target_var = state["alias_target_var"]
+    discord_alias_nickname_var = state["discord_alias_nickname_var"]
+    discord_alias_username_var = state["discord_alias_username_var"]
     phrase_var      = state["phrase_var"]
     command_var     = state["command_var"]
-    discord_ch_name_var  = state["discord_ch_name_var"]
-    discord_ch_url_var   = state["discord_ch_url_var"]
-    discord_ch_server_var = state["discord_ch_server_var"]
-    discord_srv_nickname_var = state["discord_srv_nickname_var"]
-    discord_srv_id_var   = state["discord_srv_id_var"]
-    discord_bot_token_var = state["discord_bot_token_var"]
-    discord_server_id_var = state["discord_server_id_var"]
     gemini_api_key_var   = state["gemini_api_key_var"]
     keybind_phrase_var   = state["keybind_phrase_var"]
     keybind_key_var      = state["keybind_key_var"]
@@ -536,14 +531,12 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     _test_app            = callbacks["test_app"]
     _add_alias           = callbacks["add_alias"]
     _remove_alias        = callbacks["remove_alias"]
+    _add_discord_alias   = callbacks["add_discord_alias"]
+    _remove_discord_alias = callbacks["remove_discord_alias"]
     _add_action          = callbacks["add_action"]
     _remove_action       = callbacks["remove_action"]
     _record_hotkey       = callbacks["record_hotkey"]
     _record_hold_key     = callbacks["record_hold_key"]
-    _add_discord_channel    = callbacks["add_discord_channel"]
-    _remove_discord_channel = callbacks["remove_discord_channel"]
-    _add_discord_server     = callbacks["add_discord_server"]
-    _remove_discord_server  = callbacks["remove_discord_server"]
     _add_keybind         = callbacks["add_keybind"]
     _remove_keybind      = callbacks["remove_keybind"]
     _record_keybind_key  = callbacks["record_keybind_key"]
@@ -1651,82 +1644,30 @@ _danger_btn("Remove Selected", _remove_app),
     discord_area, _, discord_vl = _scrollable_tab()
     stack.addWidget(discord_area)
 
-    for w in _section_label("Bot Credentials", "Required for `read discord`.\nGet your bot token from discord.dev."):
+    for w in _section_label("DM Contacts", "Map a spoken nickname to a Discord username.\nSay: discord dm <nickname> <message>"):
         discord_vl.addWidget(w)
-    creds_card = _card_frame()
-    creds_cvl = QVBoxLayout(creds_card)
-    creds_cvl.setContentsMargins(12, 8, 12, 8)
-    token_lbl = QLabel("Bot Token")
-    token_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    token_edit = _make_entry(320, "Bot token from Discord Developer Portal", password=True)
-    token_edit.setText(discord_bot_token_var.get())
-    token_edit.textChanged.connect(discord_bot_token_var.set)
-    creds_cvl.addWidget(_hrow(token_lbl, token_edit))
-    srv_id_lbl = QLabel("Default Server ID")
-    srv_id_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    srv_id_edit = _make_entry(220, "Right-click server → Copy Server ID")
-    srv_id_edit.setText(discord_server_id_var.get())
-    srv_id_edit.textChanged.connect(discord_server_id_var.set)
-    creds_cvl.addWidget(_hrow(srv_id_lbl, srv_id_edit))
-    discord_vl.addWidget(creds_card)
 
-    for w in _section_label("Servers", "Add servers with a nickname.\nExample: `discord <nickname> <channel> <message>`"):
-        discord_vl.addWidget(w)
-    discord_servers_textbox = _make_listbox(4)
-    discord_vl.addWidget(discord_servers_textbox)
-    srv_card = _card_frame()
-    srv_cvl = QVBoxLayout(srv_card)
-    srv_cvl.setContentsMargins(12, 8, 12, 8)
-    srv_nick_lbl = QLabel("Nickname")
-    srv_nick_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    srv_nick_edit = _make_entry(160, "e.g. baddie")
-    srv_nick_edit.textChanged.connect(discord_srv_nickname_var.set)
-    srv_cvl.addWidget(_hrow(srv_nick_lbl, srv_nick_edit))
-    srv_sid_lbl = QLabel("Server ID")
-    srv_sid_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    srv_sid_edit = _make_entry(220, "Right-click server → Copy Server ID")
-    srv_sid_edit.textChanged.connect(discord_srv_id_var.set)
-    srv_cvl.addWidget(_hrow(srv_sid_lbl, srv_sid_edit))
-    discord_vl.addWidget(srv_card)
-    discord_vl.addWidget(_hrow(
-        _primary_btn("Add Server", _add_discord_server),
-        _danger_btn("Remove Selected", _remove_discord_server),
-    ))
+    discord_aliases_textbox = _make_listbox(5)
+    discord_vl.addWidget(discord_aliases_textbox)
 
-    for w in _section_label("Channels", "Webhook channels.\nOptionally tag a server so `discord <server> <channel>` works."):
-        discord_vl.addWidget(w)
-    discord_channels_textbox = _make_listbox(5)
-    discord_vl.addWidget(discord_channels_textbox)
-    ch_card = _card_frame()
-    ch_cvl = QVBoxLayout(ch_card)
-    ch_cvl.setContentsMargins(12, 8, 12, 8)
-    ch_name_lbl = QLabel("Channel name")
-    ch_name_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    ch_name_edit = _make_entry(180, "e.g. general")
-    ch_name_edit.textChanged.connect(discord_ch_name_var.set)
-    ch_cvl.addWidget(_hrow(ch_name_lbl, ch_name_edit))
-    ch_srv_lbl = QLabel("Server nickname")
-    ch_srv_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    ch_srv_edit = _make_entry(180, "optional — e.g. baddie")
-    ch_srv_edit.textChanged.connect(discord_ch_server_var.set)
-    ch_cvl.addWidget(_hrow(ch_srv_lbl, ch_srv_edit))
-    ch_url_lbl = QLabel("Webhook URL")
-    ch_url_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    ch_url_edit = _make_entry(320, "https://discord.com/api/webhooks/...")
-    ch_url_edit.textChanged.connect(discord_ch_url_var.set)
-    ch_cvl.addWidget(_hrow(ch_url_lbl, ch_url_edit))
-    discord_vl.addWidget(ch_card)
+    da_card = _card_frame()
+    da_cvl = QVBoxLayout(da_card)
+    da_cvl.setContentsMargins(12, 8, 12, 8)
+    da_nick_lbl = QLabel("Nickname")
+    da_nick_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    da_nick_edit = _make_entry(200, "e.g. bloodman")
+    da_nick_edit.textChanged.connect(discord_alias_nickname_var.set)
+    da_cvl.addWidget(_hrow(da_nick_lbl, da_nick_edit))
+    da_user_lbl = QLabel("Discord username")
+    da_user_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    da_user_edit = _make_entry(200, "e.g. bloodman83")
+    da_user_edit.textChanged.connect(discord_alias_username_var.set)
+    da_cvl.addWidget(_hrow(da_user_lbl, da_user_edit))
+    discord_vl.addWidget(da_card)
     discord_vl.addWidget(_hrow(
-        _primary_btn("Add Channel", _add_discord_channel),
-        _danger_btn("Remove Selected", _remove_discord_channel),
+        _primary_btn("Add Contact", _add_discord_alias),
+        _danger_btn("Remove Selected", _remove_discord_alias),
     ))
-    cmd_hint = _hint_label(
-        "Commands\n"
-        "discord <channel> <message>\n"
-        "discord <server> <channel> <message>\n"
-        "read discord <server> <channel>"
-    )
-    discord_vl.addWidget(cmd_hint)
     discord_vl.addStretch()
 
     # =====================================================================
@@ -2265,8 +2206,6 @@ _danger_btn("Remove Selected", _remove_app),
         bday_month_combo.setCurrentText(str(birthday_month.get()))
         bday_day_combo.setCurrentText(str(birthday_day.get()))
         ai_edit.setText(gemini_api_key_var.get())
-        token_edit.setText(discord_bot_token_var.get())
-        srv_id_edit.setText(discord_server_id_var.get())
         _sync_mode_radios()
 
     # =====================================================================
@@ -2275,10 +2214,9 @@ _danger_btn("Remove Selected", _remove_app),
     return {
         "apps_textbox": apps_textbox,
         "aliases_textbox": aliases_textbox,
+        "discord_aliases_textbox": discord_aliases_textbox,
         "actions_textbox": actions_textbox,
         "history_textbox": history_textbox,
-        "discord_channels_textbox": discord_channels_textbox,
-        "discord_servers_textbox": discord_servers_textbox,
         "keybinds_textbox": keybinds_textbox,
         "macros_textbox": macros_textbox,
         "macro_pending_textbox": macro_pending_textbox,
