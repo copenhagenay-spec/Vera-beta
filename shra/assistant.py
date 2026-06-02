@@ -2609,6 +2609,8 @@ def main() -> None:
         config_path = os.path.join(data_dir, "config.json")
         log_path = os.path.join(logs_dir, "assistant.log")
         transcripts_path = os.path.join(logs_dir, "transcripts.log")
+        freeze_watchdog_path = os.path.join(logs_dir, "freeze_watchdog.log")
+        memory_watchdog_path = os.path.join(logs_dir, "memory_watchdog.log")
         ts = time.strftime("%Y%m%d_%H%M%S")
         zip_path = os.path.join(logs_dir, f"bug_report_{ts}.zip")
 
@@ -2623,6 +2625,12 @@ def main() -> None:
                     files_added += 1
                 if os.path.exists(transcripts_path):
                     zf.write(transcripts_path, arcname="transcripts.log")
+                    files_added += 1
+                if os.path.exists(freeze_watchdog_path):
+                    zf.write(freeze_watchdog_path, arcname="freeze_watchdog.log")
+                    files_added += 1
+                if os.path.exists(memory_watchdog_path):
+                    zf.write(memory_watchdog_path, arcname="memory_watchdog.log")
                     files_added += 1
             if files_added == 0:
                 try:

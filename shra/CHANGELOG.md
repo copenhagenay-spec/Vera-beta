@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.99.9.7 — Organic Memory & Tier System
+- Added: Organic memory system — SH|RA now silently learns personal facts from natural conversation without requiring explicit "remember" commands. Powered by LLM detection with regex fallback when no API key is active.
+- Added: LLM-driven memory forgetting — say "forget that thing about X" naturally and SH|RA finds the right memory from context and removes it. No exact command required.
+- Added: Recent activity tracking — SH|RA now knows what commands were recently run (app opens, timers, macros, searches) and can reference them in conversation.
+- Added: System context awareness — SH|RA knows how many timers are currently running during conversation.
+- Added: Tier system — license keys now encode Plus, Pro, and Elite tiers. Existing Premium keys automatically route to Plus. Elite keys unlock full memory injection.
+- Added: Tiered memory injection — memory facts injected into LLM context scale by tier. Free gets name only, Plus gets 8 facts, Pro gets 15, Elite gets everything.
+- Added: Value deduplication in memory — the same fact can no longer be stored twice under different keys.
+- Fixed: "Remember" and "don't forget" intent no longer hijacks mid-sentence phrases — only fires when used as a direct command at the start of an utterance.
+- Fixed: "What do you know about me" now handled naturally by the LLM using injected memory context instead of reading out a raw key/value dump.
+- Fixed: Timer alert popup not appearing when timer expired — tkinter was conflicting with the Qt event loop. Now uses a proper Qt dialog on the main thread.
+- Improved: Bug reports now include freeze_watchdog.log and memory_watchdog.log in the submitted zip for better crash diagnostics.
+- Improved: YouTube search now opens the top video directly instead of a search results page.
+- Added: Full Spotify integration — voice-controlled search, play, pause, skip, previous, playlists, and albums via the Spotify Web API. Say "connect Spotify" to authenticate once, then control playback hands-free.
+
 ## 0.99.9 — Hotfix
 - Fixed: Listener failing to start — input_wrapper.py and tray_wrapper.py incorrectly removed from installer package in 0.99.8.9.
 

@@ -664,8 +664,8 @@ def _get_mode() -> str:
             return "professional"
         if mode == "jarvis":
             return "jarvis"
-        from license import is_premium
-        if mode == "offensive" and is_premium():
+        from license import get_tier
+        if mode == "offensive" and get_tier() != "free":
             return "offensive"
     except Exception:
         pass
@@ -1774,12 +1774,78 @@ def _get_name() -> str:
         return ""
 
 
+_PASSIVE_MEMORY_PATTERNS = [
+    # "my <thing> is <value>" / "my favourite/favorite X is Y"
+    (r"\bmy\s+(\w+(?:\s+\w+){0,2})\s+is\s+(.+?)(?:\s*(?:right now|at the moment|these days))?\s*(?:[,.]|$)", lambda m: (f"my_{m.group(1).strip().lower().replace(' ', '_')}", m.group(2).strip())),
+    # "it's my favourite/favorite <thing>" / "that's my favourite <thing>"
+    (r"\b(?:it['’]?s|that['’]?s)\s+(?:one of\s+)?my\s+(?:fav(?:ou?rite)?\s+)?(.+?)(?:\s*(?:right now|at the moment|these days|game|show|thing))?\s*(?:[,.]|$)", lambda m: ("favourite", m.group(1).strip())),
+    # "I use/I'm using/I been using" — handles straight and curly apostrophes
+    (r"\bi['’]?m\s+using\s+(?:a\s+|an\s+|my\s+)?(.+?)(?:\s+for\s+\w+)?\s*(?:[,.]|$)", lambda m: ("uses", m.group(1).strip())),
+    (r"\bi\s+use\s+(?:a\s+|an\s+|my\s+)?(.+?)(?:\s+for\s+\w+)?\s*(?:[,.]|$)", lambda m: ("uses", m.group(1).strip())),
+    # "I've been using/wearing/playing X" — handles contractions
+    (r"\bi['’]?ve\s+been\s+(?:using|wearing|playing|running|rocking)\s+(?:a\s+|an\s+|my\s+|them\s+)?(.+?)(?:\s+(?:for|a\s+lot|lately))?.{0,20}(?:[,.]|$)", lambda m: ("lately_using", m.group(1).strip())),
+    # "I have/got <value>"
+    (r"\bi\s+(?:have|got)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\s+for\s+\w+)?\s*(?:[,.]|$)", lambda m: ("has", m.group(1).strip())),
+    # "I prefer <value>"
+    (r"\bi\s+prefer\s+(.+?)(?:\s*[,.]|$)", lambda m: ("prefers", m.group(1).strip())),
+    # "I switched/swapped to <value>"
+    (r"\bi(?:\s+just)?\s+(?:switched|swapped)\s+to\s+(?:a\s+|an\s+)?(.+?)(?:\s*[,.]|$)", lambda m: ("switched_to", m.group(1).strip())),
+    # "I play/I've been playing <game>"
+    (r"\bi\s+(?:mainly\s+|mostly\s+)?play\s+(.+?)(?:\s*[,.]|$)", lambda m: ("plays", m.group(1).strip())),
+    # "it's a set of / it's a pair of <thing>"
+    (r"\bit['’]?s\s+(?:a\s+)?(?:set|pair|bunch)\s+of\s+(?:the\s+)?(.+?)(?:\s*[,.]|$)", lambda m: ("has", m.group(1).strip())),
+]
+
+_PASSIVE_SKIP = {
+    "it", "that", "this", "one", "something", "things", "stuff", "a lot",
+    "anything", "everything", "them", "those", "these", "good", "great",
+    "nice", "fine", "okay", "fun", "hard", "easy", "bad", "weird",
+}
+
+def _try_passive_memory(transcript: str) -> None:
+    """Silently extract and store personal facts from natural conversation. No TTS, no side effects."""
+    try:
+        t = transcript.lower().strip()
+        # Strip trailing noise phrases before matching
+        t = re.sub(r"\s*(?:right now|at the moment|these days|you know|i guess|i think|honestly|though|tbh)\s*[,.]?\s*$", "", t).strip()
+        from memory import remember as _remember
+        for pattern, extractor in _PASSIVE_MEMORY_PATTERNS:
+            m = re.search(pattern, t)
+            if m:
+                key, value = extractor(m)
+                value = re.sub(r"\s+(?:for it|for that|though|right|i guess|you know)$", "", value).strip()
+                if value and value not in _PASSIVE_SKIP and len(value) > 2 and len(value) < 60:
+                    _remember(key, value)
+                    break
+    except Exception:
+        pass
+
+
 def _get_session_ctx() -> dict:
     try:
         import time as _t
-        from memory import get_session as _gs, session_minutes as _sm
+        from memory import get_session as _gs, session_minutes as _sm, get_recent_commands as _grc
         mood_time = _gs("mood_time")
         mood_minutes = round((_t.time() - mood_time) / 60) if mood_time else None
+
+        # Format recent commands with relative timestamps
+        recent = []
+        now = _t.time()
+        for cmd in _grc():
+            age = int((now - cmd["ts"]) / 60)
+            age_str = "just now" if age < 1 else f"{age}m ago"
+            label = cmd["action"]
+            if cmd.get("detail"):
+                label += f" {cmd['detail']}"
+            recent.append(f"{label} ({age_str})")
+
+        sys_ctx = {}
+        try:
+            from skills import get_system_context as _gsc
+            sys_ctx = _gsc()
+        except Exception:
+            pass
+
         return {
             "name": _get_name(),
             "mood": _gs("mood"),
@@ -1790,6 +1856,8 @@ def _get_session_ctx() -> dict:
             "last_command": _gs("last_command"),
             "last_app": _gs("last_app"),
             "repeat_count": int(_gs("repeat_count") or 0),
+            "recent_commands": recent,
+            "active_timers": sys_ctx.get("active_timers", 0),
         }
     except Exception:
         return {}
@@ -2083,6 +2151,7 @@ def _handle_social_offensive(t: str, speak_fn, name: str, ctx: dict) -> bool:
     except Exception:
         pass
 
+    _try_passive_memory(t)
     return False
 
 
@@ -2115,6 +2184,7 @@ def handle_social(transcript: str, speak_fn) -> bool:
                 return True
         except Exception:
             pass
+        _try_passive_memory(transcript)
         speak_fn(random.choice(["What do you need.", "Go ahead.", "I'm listening."]))
         return True
 
@@ -2232,6 +2302,9 @@ def handle_social(transcript: str, speak_fn) -> bool:
             return True
     except Exception:
         pass
+
+    # LLM unavailable — fall back to regex passive memory
+    _try_passive_memory(transcript)
 
     for pattern, pool in _SOCIAL_PATTERNS:
         if re.search(pattern, t):

@@ -15,6 +15,8 @@ import webbrowser
 from config import load_config
 from personality import get_confirm, handle_social, get_fallback, get_joke, get_failure
 
+_YOUTUBE_API_KEY = "AIzaSyBMsqJL0cLowy1cd9lAXDn13PWHHptkljA"
+
 
 def _confirm(prompt: str, allow_prompt: bool, confirm_fn=None) -> bool:
     cfg = load_config()
@@ -67,6 +69,11 @@ def _append_note(text: str) -> bool:
             f.write(_normalize_numbers_in_text(text.strip()) + "\n")
         print(f"Note saved: {text.strip()}")
         _log_event(f"NOTE_SAVED: {text.strip()}")
+        try:
+            from memory import push_recent_command as _prc
+            _prc("saved note", text.strip()[:40])
+        except Exception:
+            pass
         return True
     except Exception as exc:
         print(f"Failed to save note: {exc}")
@@ -315,12 +322,13 @@ def _start_timer(seconds: int, label: str) -> None:
             except Exception:
                 pass
             try:
-                import tkinter as tk
-                from tkinter import messagebox
-                root = tk.Tk()
-                root.withdraw()
-                messagebox.showinfo("SH|RA Timer", f"Timer done: {label}")
-                root.destroy()
+                from PySide6.QtCore import QTimer
+                from PySide6.QtWidgets import QApplication, QMessageBox
+                app = QApplication.instance()
+                if app:
+                    QTimer.singleShot(0, app, lambda: QMessageBox.information(None, "SH|RA Timer", f"Timer done: {label}"))
+                else:
+                    print(f"Timer done: {label}")
             except Exception:
                 print(f"Timer done: {label}")
         except Exception:
@@ -502,21 +510,54 @@ def _media_key(action: str) -> bool:
 
 def _spotify_search(query: str) -> bool:
     try:
-        import webbrowser
-        if query:
-            webbrowser.open(f"spotify:search:{quote_plus(query)}")
-        else:
-            webbrowser.open("spotify:")
-        return True
+        from spotify import play as _sp_play, is_authenticated as _sp_auth, authenticate as _sp_auth_flow
+        if not _sp_auth():
+            # Not authenticated — fall back to URI scheme
+            import webbrowser
+            if query:
+                webbrowser.open(f"spotify:search:{quote_plus(query)}")
+            else:
+                webbrowser.open("spotify:")
+            return True
+        return _sp_play(query)
     except Exception:
-        return False
+        try:
+            import webbrowser
+            if query:
+                webbrowser.open(f"spotify:search:{quote_plus(query)}")
+            else:
+                webbrowser.open("spotify:")
+            return True
+        except Exception:
+            return False
 
 
 def _youtube_search(query: str) -> bool:
     if not query:
         url = "https://www.youtube.com/"
     else:
-        url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+        try:
+            api_key = _YOUTUBE_API_KEY
+            if api_key:
+                import urllib.request as _ur
+                import json as _json
+                search_url = (
+                    f"https://www.googleapis.com/youtube/v3/search"
+                    f"?part=snippet&maxResults=1&type=video"
+                    f"&q={quote_plus(query)}&key={api_key}"
+                )
+                with _ur.urlopen(search_url, timeout=5) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                items = data.get("items", [])
+                if items:
+                    video_id = items[0]["id"]["videoId"]
+                    url = f"https://www.youtube.com/watch?v={video_id}"
+                else:
+                    url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+            else:
+                url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+        except Exception:
+            url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
     try:
         import webbrowser
         webbrowser.open(url)
@@ -850,6 +891,13 @@ def set_mute_status_callback(fn) -> None:
 
 def is_muted() -> bool:
     return bool(_shra_muted["value"])
+
+
+def get_system_context() -> dict:
+    """Return live system state for LLM context injection."""
+    return {
+        "active_timers": len(_active_timers),
+    }
 
 
 _CLOSE_OVERRIDES = {
@@ -2042,7 +2090,7 @@ def _ih_ask_name(m, t, allow_prompt, confirm_fn, restart_fn):
 
 
 # --- Memory: remember fact ---
-@_intent(875, r"\b(remember|shira remember|don'?t forget)\s+(?:that\s+)?(.+)$")
+@_intent(875, r"^(remember|shira\s+remember|don'?t forget)\s+(?:that\s+)?(.+)$")
 def _ih_remember(m, t, allow_prompt, confirm_fn, restart_fn):
     from memory import remember as _remember
     fact = m.group(2).strip()
@@ -2054,37 +2102,29 @@ def _ih_remember(m, t, allow_prompt, confirm_fn, restart_fn):
         _remember(key, value)
         _tts_speak(f"Got it, remembered that your {name_match.group(1)} is {value}")
     else:
-        key = f"fact_{int(time.time())}"
+        # Derive a semantic key from the first 3 meaningful words
+        words = re.sub(r"[^a-z0-9\s]", "", fact.lower()).split()
+        stopwords = {"i", "a", "an", "the", "is", "are", "was", "that", "its", "it", "my", "we"}
+        key_words = [w for w in words if w not in stopwords][:3]
+        key = "_".join(key_words) if key_words else f"fact_{int(time.time())}"
         _remember(key, fact)
         _tts_speak("Got it, I'll remember that")
     return True
 
 
 # --- Memory: forget ---
-@_intent(874, r"\b(forget|shira forget)\s+(?:my\s+)?(.+)$")
+@_intent(874, r"^(forget|shira\s+forget)\s+(?:my\s+)?(.+)$")
 def _ih_forget(m, t, allow_prompt, confirm_fn, restart_fn):
     from memory import forget as _forget
     key = m.group(2).strip().lower()
     if _forget(key) or _forget(f"my_{key}"):
-        _tts_speak(f"Done, I've forgotten that")
-    else:
-        _tts_speak("I don't have anything stored for that")
-    return True
-
-
-# --- Memory: what do you know ---
-@_intent(876, r"\b(what do you know about me|what do about me|what about me|know about me|what do you remember|what have you remembered|tell me what you know)\b")
-def _ih_recall_all(m, t, allow_prompt, confirm_fn, restart_fn):
-    from memory import recall_all as _recall_all
-    data = _recall_all()
-    if not data:
-        _tts_speak("I don't know anything about you yet")
+        _tts_speak("Done, I've forgotten that")
         return True
-    parts = []
-    for key, value in data.items():
-        parts.append(f"{key.replace('_', ' ')}: {value}")
-    _tts_speak("Here's what I know. " + ", ".join(parts))
-    return True
+    # Exact match failed — fall through to LLM for semantic matching
+    return False
+
+
+# "what do you know about me" — handled by LLM via injected memory context
 
 
 # ---------------------------------------------------------------------------
@@ -2552,6 +2592,28 @@ def _ih_app_volume(m, t, allow_prompt, confirm_fn, restart_fn):
 
 
 # --- YouTube: open ---
+@_intent(601, r"\b(connect|link|setup|authenticate|reconnect)\s+spotify\b")
+def _ih_spotify_auth(m, t, allow_prompt, confirm_fn, restart_fn):
+    try:
+        from spotify import authenticate as _sp_auth, clear_tokens as _sp_clear
+        _sp_clear()
+        _tts_speak("Opening Spotify login — approve it in your browser")
+        _wait_for_tts()
+        def _do_auth():
+            try:
+                success = _sp_auth()
+                if success:
+                    _tts_speak("Spotify connected, you're good to go")
+                else:
+                    _tts_speak("Spotify connection failed, try again")
+            except Exception:
+                _tts_speak("Couldn't connect to Spotify")
+        threading.Thread(target=_do_auth, daemon=True).start()
+    except Exception:
+        _tts_speak("Couldn't connect to Spotify")
+    return True
+
+
 @_intent(600, r"\b(open|start|launch)\s+(you\s*tube|youtube|yt)\b")
 def _ih_youtube_open(m, t, allow_prompt, confirm_fn, restart_fn):
     return bool(_youtube_search(""))
@@ -2598,6 +2660,11 @@ def _ih_cancel_timer(m, t, allow_prompt, confirm_fn, restart_fn):
     count = _cancel_all_timers()
     if count > 0:
         _tts_speak("Timer cancelled" if count == 1 else f"{count} timers cancelled")
+        try:
+            from memory import push_recent_command as _prc
+            _prc("cancelled timer", f"{count} timer(s)")
+        except Exception:
+            pass
     else:
         _tts_speak("No timers running")
     return True
@@ -2611,6 +2678,11 @@ def _ih_set_timer(m, t, allow_prompt, confirm_fn, restart_fn):
         seconds, label = timer
         _shra_confirm("timer")
         _start_timer(seconds, label)
+        try:
+            from memory import push_recent_command as _prc
+            _prc("set timer", label)
+        except Exception:
+            pass
         return True
     return False
 
@@ -2630,11 +2702,11 @@ def _ih_macros(m, t, allow_prompt, confirm_fn, restart_fn):
         if _normalize_text(phrase) != norm_t:
             continue
         try:
-            from license import is_premium as _is_premium
-            _premium = _is_premium()
+            from license import get_tier as _get_tier
+            _tier = _get_tier()
         except Exception:
-            _premium = False
-        if not _premium:
+            _tier = "free"
+        if _tier == "free":
             _tts_speak("Command macros require a premium license.")
             return True
         def _run_steps(steps=steps):
@@ -2644,6 +2716,11 @@ def _ih_macros(m, t, allow_prompt, confirm_fn, restart_fn):
                 _wait_for_tts()   # wait for any TTS from this step to finish
                 _t.sleep(1.5)     # then add the fixed gap before the next step
         threading.Thread(target=_run_steps, daemon=True).start()
+        try:
+            from memory import push_recent_command as _prc
+            _prc("ran macro", phrase)
+        except Exception:
+            pass
         return True
     return False
 
@@ -2702,16 +2779,52 @@ def _ih_spotify(m, t, allow_prompt, confirm_fn, restart_fn):
                 if _spotify_search(query):
                     return True
 
-    # Media keys — work with any player (Spotify, Apple Music, etc.)
+    # Try Spotify API for transport controls first, fall back to media keys
+    try:
+        from spotify import is_authenticated as _sp_auth, pause as _sp_pause, next_track as _sp_next, previous_track as _sp_prev, play as _sp_play, currently_playing as _sp_now
+        _sp_authed = _sp_auth()
+    except Exception:
+        _sp_authed = False
+
+    if re.search(r"\bwhat(?:'?s| is) playing\b", t):
+        if _sp_authed:
+            try:
+                from spotify import currently_playing as _sp_now
+                track = _sp_now()
+                _tts_speak(track if track else "Nothing playing right now")
+            except Exception:
+                _tts_speak("Can't check right now")
+        else:
+            _tts_speak("Spotify isn't connected yet")
+        return True
+
     action = None
-    if re.search(r"\b(play|pause|resume|stop)(\s+(song|track|music|video|vid))?\b", t):
-        action = "play_pause"
+    if re.search(r"\b(pause|stop music|stop playing)\b", t):
+        action = "pause"
+    elif re.search(r"\b(play|resume|unpause)(\s+(song|track|music|video|vid))?\b", t):
+        action = "play"
     elif re.search(r"^(next|skip)(\s+(song|track))?$|^(next|skip)\s+(song|track)|^(skip|next)\b", t) and not re.search(r"\b(is|was|are|the)\s+next\b", t):
         action = "next"
     elif re.search(r"\b(previous|back|rewind)(\s+(song|track))?\b", t):
         action = "previous"
+
+    if action and _sp_authed:
+        try:
+            from spotify import pause as _sp_pause, next_track as _sp_next, previous_track as _sp_prev, play as _sp_play
+            if action == "pause":
+                _sp_pause()
+            elif action == "play":
+                _sp_play()
+            elif action == "next":
+                _sp_next()
+            elif action == "previous":
+                _sp_prev()
+            return True
+        except Exception:
+            pass
+
     if action:
-        return bool(_media_key(action))
+        return bool(_media_key("play_pause" if action in ("play", "pause") else action))
     return False
 
 
@@ -2774,9 +2887,10 @@ def _ih_open_app(m, t, allow_prompt, confirm_fn, restart_fn):
             return True
     result = _open_app(app, allow_prompt, confirm_fn=confirm_fn)
     if result:
-        from memory import set_session as _ss
+        from memory import set_session as _ss, push_recent_command as _prc
         _ss("last_command", "open")
         _ss("last_app", app)
+        _prc("opened app", app)
         _shra_confirm("open")
     else:
         _shra_failure("open")
@@ -2796,6 +2910,11 @@ def _ih_search(m, t, allow_prompt, confirm_fn, restart_fn):
         except Exception:
             query = ""
     if query:
+        try:
+            from memory import push_recent_command as _prc
+            _prc("searched", query)
+        except Exception:
+            pass
         return _web_search(query, allow_prompt, confirm_fn=confirm_fn)
     print("No search query provided.")
     return True

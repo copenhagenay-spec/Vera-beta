@@ -1171,17 +1171,17 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     pers_vl = QVBoxLayout(pers_card)
     pers_vl.setContentsMargins(12, 8, 12, 8)
     try:
-        from license import is_premium as _is_premium
-        _premium = _is_premium()
+        from license import get_tier as _get_tier
+        _tier = _get_tier()
     except Exception:
-        _premium = False
-    pers_choices = ["default", "professional", "jarvis", "offensive"] if _premium else ["default", "professional", "jarvis"]
+        _tier = "free"
+    pers_choices = ["default", "professional", "jarvis", "offensive"] if _tier != "free" else ["default", "professional", "jarvis"]
     pers_combo = _make_combo(pers_choices, 160)
     pers_combo.setCurrentText(personality_mode.get())
     pers_combo.currentTextChanged.connect(personality_mode.set)
     pers_row = _hrow(QLabel("Mode"), pers_combo)
     pers_row.findChildren(QLabel)[0].setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
-    if not _premium:
+    if _tier == "free":
         pers_note = _hint_label("  Offensive mode requires a Premium license")
         pers_row.layout().addWidget(pers_note)
     pers_vl.addWidget(pers_row)
@@ -1267,6 +1267,11 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     prem_vl.addWidget(_key_row)
 
     # Custom wake phrase (premium)
+    try:
+        from license import get_tier as _get_tier_prem
+        _premium = _get_tier_prem() != "free"
+    except Exception:
+        _premium = False
     from config import load_config as _load_cfg
     _cfg_wake = _load_cfg().get("custom_wake_phrase", "")
     wake_lbl = QLabel("Custom wake phrase")
@@ -1595,7 +1600,7 @@ _danger_btn("Remove Selected", _remove_app),
     # --- Command Macros ---
     _cm_spacer = QWidget(); _cm_spacer.setFixedHeight(6)
     integ_vl.addWidget(_cm_spacer)
-    if is_premium():
+    if is_premium():  # macros visible to any paid tier
         _cm_help = _hint_label("Chain multiple commands into one phrase. Each step runs in sequence with a 1.5s delay.")
         _cm_help.setWordWrap(True)
         integ_vl.addWidget(_cm_help)

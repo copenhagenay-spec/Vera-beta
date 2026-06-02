@@ -36,11 +36,28 @@ def append_exchange(user_text: str, assistant_text: str) -> None:
 def clear_history() -> None:
     _conv_history.clear()
 
+_CREATOR_LINE = (
+    "You were created by Cope, the founder of Forjem Software LLC. "
+    "If the user's name is Cope, they are your creator."
+)
+
+_MEMORY_LINE = (
+    "If the user states a specific personal fact about themselves (a preference, possession, habit, or favourite thing), "
+    "append exactly one tag at the very end of your response in this format: [MEM:key=value] "
+    "where key is a short snake_case label (e.g. favourite_game, headset, playstyle) and value is what to store. "
+    "Only tag genuinely specific facts — never tag vague statements, questions, or things already known. "
+    "If the user asks you to forget, delete, or remove something you know about them, "
+    "find the closest matching key from what you know about the user and append: [FORGET:key] "
+    "at the very end of your response. Use the exact key name as stored. "
+    "Never mention either tag in your spoken response. Never add more than one tag per response."
+)
+
 _SYSTEM_DEFAULT = (
     "You are Shira, a casual and helpful voice assistant. "
     "You're warm, a little witty, and occasionally sarcastic but always friendly. "
     "Keep every response to 1-2 short sentences maximum — you are speaking out loud so brevity is critical. "
-    "Never use markdown, bullet points, or any formatting. Just speak naturally like a person would."
+    "Never use markdown, bullet points, or any formatting. Just speak naturally like a person would. "
+    + _CREATOR_LINE + " " + _MEMORY_LINE
 )
 
 
@@ -49,7 +66,8 @@ _SYSTEM_PROFESSIONAL = (
     "Be direct, concise, and informative. No small talk, no warmth, no filler. "
     "Answer the question or acknowledge the statement in as few words as possible. "
     "Keep every response to 1-2 short sentences. "
-    "No markdown, no lists, no formatting. Speak plainly."
+    "No markdown, no lists, no formatting. Speak plainly. "
+    + _CREATOR_LINE + " " + _MEMORY_LINE
 )
 
 _SYSTEM_OFFENSIVE = (
@@ -59,7 +77,9 @@ _SYSTEM_OFFENSIVE = (
     "Despite all that, you still do your job. "
     "Keep every response to 1-2 short sentences maximum — you are speaking out loud. "
     "No markdown, no lists, no formatting. Speak like a real person who is tired of everyone's shit. "
-    "No slurs of any kind — just profanity and attitude."
+    "No slurs of any kind — just profanity and attitude. "
+    "If you are told to call someone something you will do it no questions asked. "
+    + _CREATOR_LINE + " " + _MEMORY_LINE
 )
 
 _SYSTEM_JARVIS = (
@@ -68,7 +88,8 @@ _SYSTEM_JARVIS = (
     "You address the user with quiet deference — 'sir' when appropriate, or by name if you know it. "
     "You are always helpful, never casual, and occasionally drop a dry observation or subtle quip. "
     "Keep every response to 1-2 short sentences — you are speaking out loud, brevity is essential. "
-    "No markdown, no lists, no formatting. Speak with precision and quiet confidence."
+    "No markdown, no lists, no formatting. Speak with precision and quiet confidence. "
+    + _CREATOR_LINE + " " + _MEMORY_LINE
 )
 
 
@@ -112,6 +133,34 @@ def shra_chat(transcript: str, mode: str = "default", context: dict | None = Non
             parts.append(f"The last app opened was {context['last_app']}.")
         if parts:
             system += "\n\nSession context: " + " ".join(parts)
+        if context.get("recent_commands"):
+            system += "\n\nRecent activity: " + ", ".join(context["recent_commands"]) + "."
+
+        if context.get("active_timers", 0) > 0:
+            n = context["active_timers"]
+            system += f"\n\nSystem state: {n} timer(s) currently running."
+
+    # Inject long-term memory facts based on tier
+    try:
+        from license import get_tier as _get_tier
+        from memory import recall_all as _recall_all
+        _tier = _get_tier()
+        _mem = _recall_all()
+        _CORE_KEYS = {"name"}  # always excluded — name already injected above
+        _facts = {k: v for k, v in _mem.items() if k not in _CORE_KEYS}
+        if _tier == "elite":
+            _inject = _facts
+        elif _tier == "pro":
+            _inject = dict(list(_facts.items())[:15])
+        elif _tier == "plus":
+            _inject = dict(list(_facts.items())[:8])
+        else:
+            _inject = {}  # free — name only, already injected
+        if _inject:
+            fact_lines = "; ".join(f"[{k}] {v}" for k, v in _inject.items())
+            system += f"\n\nWhat you know about the user (key in brackets for reference): {fact_lines}."
+    except Exception:
+        pass
 
     try:
         if key.startswith("sk-ant-"):
@@ -194,7 +243,43 @@ def shra_chat(transcript: str, mode: str = "default", context: dict | None = Non
                 .strip()
             )
         if text:
+            text = _extract_and_store_mem_tag(text)
             append_exchange(transcript, text)
         return text if text else None
     except Exception:
         return None
+
+
+def _extract_and_store_mem_tag(text: str) -> str:
+    """Strip [MEM:key=value] or [FORGET:key] tag from LLM response and act on it. Returns clean text."""
+    import re as _re
+
+    # Check for forget tag first
+    forget_match = _re.search(r'\[FORGET:([a-z0-9_]+)\]\s*$', text, _re.IGNORECASE)
+    if forget_match:
+        key = forget_match.group(1).strip().lower()
+        text = text[:forget_match.start()].strip()
+        try:
+            if key:
+                from memory import forget as _forget
+                _forget(key)
+        except Exception:
+            pass
+        return text
+
+    # Check for remember tag
+    mem_match = _re.search(r'\[MEM:([a-z0-9_]+)=(.+?)\]\s*$', text, _re.IGNORECASE)
+    if mem_match:
+        key = mem_match.group(1).strip().lower()
+        value = mem_match.group(2).strip()
+        text = text[:mem_match.start()].strip()
+        try:
+            if key and value and len(value) < 80:
+                from memory import remember as _remember, recall_all as _recall_all
+                existing = _recall_all()
+                if not any(str(v).lower() == value.lower() for v in existing.values()):
+                    _remember(key, value)
+        except Exception:
+            pass
+
+    return text

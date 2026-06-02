@@ -69,7 +69,25 @@ _SESSION: dict = {
     "command_count": 0,
     "repeat_transcript": None,   # last transcript, for repeat detection
     "repeat_count": 0,           # how many times same transcript repeated
+    "recent_commands": [],       # list of {action, detail, ts} — last 5 meaningful actions
 }
+
+_RECENT_COMMANDS_MAX = 5
+
+
+def push_recent_command(action: str, detail: str = "") -> None:
+    """Record a meaningful action into the recent commands list. Keeps last 5."""
+    entry = {"action": action, "detail": detail, "ts": time.time()}
+    cmds = _SESSION.get("recent_commands", [])
+    cmds.append(entry)
+    if len(cmds) > _RECENT_COMMANDS_MAX:
+        cmds = cmds[-_RECENT_COMMANDS_MAX:]
+    _SESSION["recent_commands"] = cmds
+
+
+def get_recent_commands() -> list:
+    """Return recent commands list."""
+    return _SESSION.get("recent_commands", [])
 
 
 def set_session(key: str, value) -> None:
@@ -107,4 +125,5 @@ def clear_session() -> None:
         "command_count": 0,
         "repeat_transcript": None,
         "repeat_count": 0,
+        "recent_commands": [],
     })
