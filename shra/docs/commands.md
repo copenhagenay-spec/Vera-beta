@@ -25,10 +25,12 @@ A full list of everything you can say to SH|RA. Say **"what can I say"** at any 
 
 | What to say | What happens |
 |---|---|
-| `search for <query>` | Opens a Google search in your browser |
+| `search for <query>` | Opens a web search in your preferred browser |
 | `web search for <query>` | Same as above |
 
 > **Example:** "search for best graphics settings for rust"
+>
+> **Preferred browser:** Configurable in Settings → General. SH\|RA will use that browser for searches and YouTube. Falls back to your system default if the selected browser isn't found.
 
 ---
 
@@ -198,10 +200,12 @@ A full list of everything you can say to SH|RA. Say **"what can I say"** at any 
 
 | What to say | What happens |
 |---|---|
-| `show overlay` | Shows the transparent always-on-top bar with your last 3 voice exchanges |
-| `hide overlay` | Hides the overlay |
+| `show overlay` / `overlay edit` | Shows all widget cards in edit mode — drag to reposition, click PIN to keep visible |
+| `hide overlay` / `overlay lock` | Locks positions, saves, and hides unpinned cards. Pinned cards stay on screen. |
 
-> Position and hotkey are configurable in Settings → Game Overlay.
+> The overlay hotkey (configurable in Settings → Game Overlay) does the same thing — press to show, press again to hide and lock.
+>
+> See the [Overlay Guide](overlay.md) for full details on widgets, pinning, and the Now Playing controls.
 
 ---
 
@@ -209,14 +213,13 @@ A full list of everything you can say to SH|RA. Say **"what can I say"** at any 
 
 | What to say | What happens |
 |---|---|
-| `discord <channel> <message>` | Sends a message to a Discord channel via webhook |
-| `discord <server> <channel> <message>` | Sends to a specific server's channel |
-| `read discord <channel>` | Reads the last message in a channel aloud |
-| `read discord <server> <channel>` | Reads from a specific server's channel |
-| `discord delete <channel>` | Deletes the last message sent to a channel |
-| `discord purge <channel> <n>` | Bulk deletes up to 100 messages |
+| `discord dm <name> <message>` | Sends a DM to a contact in your alias list |
+| `discord <name> <message>` | Sends to a contact or channel alias |
+| `discord read <name>` | Navigates to the contact or channel so you can read it, then tabs back |
 
-> Requires Discord webhook setup in the Discord tab. See the [Discord Setup Guide](discord.md) for details.
+> Contacts and channel aliases are configured in Settings → Discord. SH\|RA will not send to anyone not in your alias list — if the name isn't recognized she'll tell you instead of guessing.
+>
+> See the [Discord Setup Guide](discord.md) for details.
 
 ---
 

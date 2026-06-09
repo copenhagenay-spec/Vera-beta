@@ -731,6 +731,7 @@ def main() -> None:
     spotify_requires = SimpleVar(value=bool(cfg.get("spotify_requires_keyword", False)))
     spotify_keywords = SimpleVar(value=str(cfg.get("spotify_keywords", "spotify")))
     news_source = SimpleVar(value=cfg.get("news_source", "BBC"))
+    preferred_browser = SimpleVar(value=cfg.get("preferred_browser", "default"))
     birthday_month = SimpleVar(value=str(cfg.get("birthday_month", "")))
     birthday_day = SimpleVar(value=str(cfg.get("birthday_day", "")))
 
@@ -773,6 +774,14 @@ def main() -> None:
                 "username": str(a.get("username", "")).strip(),
             })
 
+    discord_channel_aliases = []
+    for a in cfg.get("discord_channel_aliases", []):
+        if isinstance(a, dict) and a.get("nickname") and a.get("channel_id"):
+            discord_channel_aliases.append({
+                "nickname": str(a.get("nickname", "")).strip().lower(),
+                "channel_id": str(a.get("channel_id", "")).strip(),
+            })
+
     keybinds = cfg.get("keybinds", [])
     if not isinstance(keybinds, list):
         keybinds = []
@@ -798,6 +807,9 @@ def main() -> None:
     alias_target_var = SimpleVar()
     discord_alias_nickname_var = SimpleVar()
     discord_alias_username_var = SimpleVar()
+    discord_channel_alias_nickname_var = SimpleVar()
+    discord_channel_alias_id_var = SimpleVar()
+    discord_read_duration_var = SimpleVar(value=int(cfg.get("discord_read_duration", 5)))
     phrase_var = SimpleVar()
     command_var = SimpleVar()
     gemini_api_key_var = SimpleVar(value=cfg.get("gemini_api_key", ""))
@@ -842,6 +854,7 @@ def main() -> None:
     apps_textbox = None
     aliases_textbox = None
     discord_aliases_textbox = None
+    discord_channel_aliases_textbox = None
     actions_textbox = None
     keybinds_textbox = None
     macros_textbox = None
@@ -908,7 +921,7 @@ def main() -> None:
             "personality_mode": personality_mode.get(),
             "overlay_position": overlay_position.get(),
             "overlay_hotkey": overlay_hotkey.get(),
-            "overlay_widgets": cfg.get("overlay_widgets", {}),
+            "overlay_widget_states": load_config().get("overlay_widget_states", {}),
             "joy_ptt_button": joy_ptt_button.get(),
             "font_scale": font_scale.get(),
             "premium": bool(premium.get()),
@@ -918,12 +931,15 @@ def main() -> None:
             "spotify_requires_keyword": bool(spotify_requires.get()),
             "spotify_keywords": spotify_keywords.get().strip(),
             "news_source": news_source.get(),
+            "preferred_browser": preferred_browser.get(),
             "birthday_month": int(birthday_month.get()) if birthday_month.get().isdigit() else 0,
             "birthday_day": int(birthday_day.get()) if birthday_day.get().isdigit() else 0,
             "actions": [a for a in actions if a.get("phrase") and a.get("command")],
             "apps": {a.get("name"): a.get("command") for a in apps if a.get("name") and a.get("command")},
             "app_aliases": {a.get("alias"): a.get("target") for a in aliases if a.get("alias") and a.get("target")},
             "discord_aliases": [a for a in discord_aliases if a.get("nickname") and a.get("username")],
+            "discord_channel_aliases": [a for a in discord_channel_aliases if a.get("nickname") and a.get("channel_id")],
+            "discord_read_duration": max(1, int(discord_read_duration_var.get())),
             "gemini_api_key": gemini_api_key_var.get().strip(),
             "premium": bool(cfg.get("premium", False)),
             "keybinds": [k for k in keybinds if k.get("phrase") and k.get("key")],
@@ -1427,6 +1443,7 @@ def main() -> None:
         spotify_requires.set(bool(saved.get("spotify_requires_keyword", False)))
         spotify_keywords.set(str(saved.get("spotify_keywords", "spotify")))
         news_source.set(saved.get("news_source", "BBC"))
+        preferred_browser.set(saved.get("preferred_browser", "default"))
         birthday_month.set(str(saved.get("birthday_month", "") or ""))
         birthday_day.set(str(saved.get("birthday_day", "") or ""))
         gemini_api_key_var.set(saved.get("gemini_api_key", ""))
@@ -1452,12 +1469,22 @@ def main() -> None:
             for alias, target in aliases_cfg.items():
                 aliases.append({"alias": str(alias).lower(), "target": str(target).lower()})
 
+        discord_read_duration_var.set(int(saved.get("discord_read_duration", 5)))
+
         discord_aliases[:] = []
         for a in saved.get("discord_aliases", []):
             if isinstance(a, dict) and a.get("nickname") and a.get("username"):
                 discord_aliases.append({
                     "nickname": str(a.get("nickname", "")).strip().lower(),
                     "username": str(a.get("username", "")).strip(),
+                })
+
+        discord_channel_aliases[:] = []
+        for a in saved.get("discord_channel_aliases", []):
+            if isinstance(a, dict) and a.get("nickname") and a.get("channel_id"):
+                discord_channel_aliases.append({
+                    "nickname": str(a.get("nickname", "")).strip().lower(),
+                    "channel_id": str(a.get("channel_id", "")).strip(),
                 })
 
         saved_keybinds = saved.get("keybinds", [])
@@ -1476,6 +1503,7 @@ def main() -> None:
         _refresh_apps()
         _refresh_aliases()
         _refresh_discord_aliases()
+        _refresh_discord_channel_aliases()
         _refresh_keybinds()
         if callable(_ui_refresh_fn):
             _ui_refresh_fn()
@@ -1890,6 +1918,35 @@ def main() -> None:
         _refresh_discord_aliases()
         _refresh_save_prompt()
 
+    def _refresh_discord_channel_aliases():
+        if discord_channel_aliases_textbox is None:
+            return
+        discord_channel_aliases_textbox.clear()
+        for a in discord_channel_aliases:
+            discord_channel_aliases_textbox.addItem(f"{a.get('nickname')}  ->  {a.get('channel_id')}")
+
+    def _add_discord_channel_alias():
+        nickname = discord_channel_alias_nickname_var.get().strip().lower()
+        channel_id = discord_channel_alias_id_var.get().strip()
+        if not nickname or not channel_id:
+            _notify_error("Invalid", "Nickname and Channel ID are required.")
+            return
+        discord_channel_aliases.append({"nickname": nickname, "channel_id": channel_id})
+        discord_channel_alias_nickname_var.set("")
+        discord_channel_alias_id_var.set("")
+        _refresh_discord_channel_aliases()
+        _refresh_save_prompt()
+
+    def _remove_discord_channel_alias():
+        if not discord_channel_aliases:
+            return
+        row = discord_channel_aliases_textbox.currentRow() if discord_channel_aliases_textbox else -1
+        idx = row if row >= 0 else len(discord_channel_aliases) - 1
+        if 0 <= idx < len(discord_channel_aliases):
+            discord_channel_aliases.pop(idx)
+        _refresh_discord_channel_aliases()
+        _refresh_save_prompt()
+
     def _add_app():
         name = app_name_var.get().strip().lower()
         command = app_cmd_var.get().strip()
@@ -2225,6 +2282,7 @@ def main() -> None:
                 fn = _video_ctrl.get("pause")
                 if fn:
                     fn()
+                _widget_manager.gaming_mode(True)
                 status_var.set("Gaming Mode")
                 def _hold_gaming():
                     from skills import _gaming_mode as _gm
@@ -2236,6 +2294,7 @@ def main() -> None:
                 fn = _video_ctrl.get("resume")
                 if fn:
                     fn()
+                _widget_manager.gaming_mode(False)
                 m = _runtime_mode.get("value", "idle")
                 if m == "hold":
                     status_var.set(f"Listening (hold {ptt_key.get()})")
@@ -2327,6 +2386,11 @@ def main() -> None:
                         continue
 
                     if len(audio_buf) < chunk_samples:
+                        continue
+
+                    # Skip transcription on silence — avoids CPU spikes every 1.5s when idle
+                    if np.abs(audio_buf).mean() < 0.005:
+                        audio_buf = np.zeros(0, dtype="float32")
                         continue
 
                     # Transcribe the buffer and check for wake phrase
@@ -2540,6 +2604,7 @@ def main() -> None:
         log_path = os.path.join(logs_dir, "assistant.log")
         transcripts_path = os.path.join(logs_dir, "transcripts.log")
         freeze_watchdog_path = os.path.join(logs_dir, "freeze_watchdog.log")
+        stutter_watchdog_path = os.path.join(logs_dir, "stutter_watchdog.log")
         memory_watchdog_path = os.path.join(logs_dir, "memory_watchdog.log")
         ts = time.strftime("%Y%m%d_%H%M%S")
         zip_path = os.path.join(logs_dir, f"bug_report_{ts}.zip")
@@ -2558,6 +2623,9 @@ def main() -> None:
                     files_added += 1
                 if os.path.exists(freeze_watchdog_path):
                     zf.write(freeze_watchdog_path, arcname="freeze_watchdog.log")
+                    files_added += 1
+                if os.path.exists(stutter_watchdog_path):
+                    zf.write(stutter_watchdog_path, arcname="stutter_watchdog.log")
                     files_added += 1
                 if os.path.exists(memory_watchdog_path):
                     zf.write(memory_watchdog_path, arcname="memory_watchdog.log")
@@ -2754,6 +2822,7 @@ def main() -> None:
         "spotify_requires": spotify_requires,
         "spotify_keywords": spotify_keywords,
         "news_source": news_source,
+        "preferred_browser": preferred_browser,
         "birthday_month": birthday_month,
         "birthday_day": birthday_day,
         "status_var": status_var,
@@ -2764,6 +2833,9 @@ def main() -> None:
         "alias_target_var": alias_target_var,
         "discord_alias_nickname_var": discord_alias_nickname_var,
         "discord_alias_username_var": discord_alias_username_var,
+        "discord_channel_alias_nickname_var": discord_channel_alias_nickname_var,
+        "discord_channel_alias_id_var": discord_channel_alias_id_var,
+        "discord_read_duration_var": discord_read_duration_var,
         "phrase_var": phrase_var,
         "command_var": command_var,
         "gemini_api_key_var": gemini_api_key_var,
@@ -2797,6 +2869,8 @@ def main() -> None:
         "remove_alias": _remove_alias,
         "add_discord_alias": _add_discord_alias,
         "remove_discord_alias": _remove_discord_alias,
+        "add_discord_channel_alias": _add_discord_channel_alias,
+        "remove_discord_channel_alias": _remove_discord_channel_alias,
         "add_action": _add_action,
         "remove_action": _remove_action,
         "record_hotkey": _record_hotkey,
@@ -2849,6 +2923,7 @@ def main() -> None:
     apps_textbox = widgets.get("apps_textbox")
     aliases_textbox = widgets.get("aliases_textbox")
     discord_aliases_textbox = widgets.get("discord_aliases_textbox")
+    discord_channel_aliases_textbox = widgets.get("discord_channel_aliases_textbox")
     actions_textbox = widgets.get("actions_textbox")
     history_textbox = widgets.get("history_textbox")
     keybinds_textbox = widgets.get("keybinds_textbox")
@@ -2897,29 +2972,47 @@ def main() -> None:
             for line in reversed(transcript_history):
                 history_textbox.append(line)
             history_textbox.setReadOnly(True)
-        _game_overlay.push_you(text)
+        _widget_manager.push_you(text)
 
     # =========================================================================
     #  Game overlay setup
     # =========================================================================
-    from overlay import GameOverlay
-    _game_overlay = GameOverlay(position=overlay_position.get())
+    from overlay import WidgetManager
 
-    # Keep overlay position in sync when setting changes
-    overlay_position.trace_add("write", lambda *_: _game_overlay.set_position(overlay_position.get()))
+    _widget_states: dict = cfg.get("overlay_widget_states", {})
+
+    def _save_widget_states(states: dict) -> None:
+        try:
+            live = load_config()
+            live["overlay_widget_states"] = states
+            from config import save_config
+            save_config(live)
+        except Exception:
+            pass
+
+    _widget_manager = WidgetManager(
+        save_fn=_save_widget_states,
+        initial_states=_widget_states,
+        default_position=overlay_position.get(),
+    )
+
+    # Keep transcript card default position in sync when setting changes
+    overlay_position.trace_add("write", lambda *_: _widget_manager.set_position(overlay_position.get()))
 
     # Register TTS hook so SH|RA responses appear in overlay
     import skills as _skills_mod
     _skills_mod._tts_hooks.append(
-        lambda t: _bridge.post(lambda _t=t: _game_overlay.push_shra(_t))
+        lambda t: _bridge.post(lambda _t=t: _widget_manager.push_shra(_t))
     )
 
-    # Wire overlay show/hide callbacks for voice commands
-    _skills_mod._overlay_callbacks["show"] = lambda: _bridge.post(_game_overlay.show)
-    _skills_mod._overlay_callbacks["hide"] = lambda: _bridge.post(_game_overlay.hide)
+    # Wire overlay show/hide/edit callbacks for voice commands
+    _skills_mod._overlay_callbacks["show"]      = lambda: _bridge.post(_widget_manager.show)
+    _skills_mod._overlay_callbacks["hide"]      = lambda: _bridge.post(_widget_manager.hide)
+    _skills_mod._overlay_callbacks["edit"]      = lambda: _bridge.post(_widget_manager.enter_edit_mode)
+    _skills_mod._overlay_callbacks["exit_edit"] = lambda: _bridge.post(_widget_manager.exit_edit_mode)
 
     # Wire weather update callback
-    _skills_mod._weather_callbacks["update"] = lambda t: _bridge.post(lambda _t=t: _game_overlay.set_weather(_t))
+    _skills_mod._weather_callbacks["update"] = lambda t: _bridge.post(lambda _t=t: _widget_manager.set_weather(_t))
 
     # Overlay hotkey listener
     _overlay_hk_listener: list = [None]
@@ -2938,14 +3031,14 @@ def main() -> None:
                 _hk_vk = _key_name_to_vk(_raw_hk)
                 def _on_press(key):
                     if hasattr(key, 'vk') and key.vk == _hk_vk:
-                        _bridge.post(_game_overlay.toggle)
+                        _bridge.post(_widget_manager.hotkey_press)
             else:
                 key_obj = _resolve_hold_key(hk, _kb)
                 if not key_obj:
                     return
                 def _on_press(key):
                     if key == key_obj:
-                        _bridge.post(_game_overlay.toggle)
+                        _bridge.post(_widget_manager.hotkey_press)
             listener = _kb.Listener(on_press=_on_press)
             listener.daemon = True
             listener.start()
@@ -2973,6 +3066,7 @@ def main() -> None:
     _refresh_apps()
     _refresh_aliases()
     _refresh_discord_aliases()
+    _refresh_discord_channel_aliases()
     _refresh_keybinds()
     _refresh_macros()
     _saved_config_signature[0] = _config_signature()
@@ -2993,9 +3087,11 @@ def main() -> None:
         spotify_requires,
         spotify_keywords,
         news_source,
+        preferred_browser,
         birthday_month,
         birthday_day,
         gemini_api_key_var,
+        discord_read_duration_var,
     ):
         _var.trace_add("write", _refresh_save_prompt)
     _refresh_save_prompt()
@@ -3231,6 +3327,7 @@ def main() -> None:
         def _power_callback(context, ptype, setting):
             if ptype in (PBT_APMRESUMESUSPEND, PBT_APMRESUMEAUTOMATIC):
                 _wake_event.set()  # kick off burst logging immediately
+                _heartbeat[0] = time.monotonic()  # prevent false freeze detection on wake
                 if not _wake_restart_pending[0]:
                     _wake_restart_pending[0] = True
                     _bridge.post(lambda: QTimer.singleShot(2000, _do_restart))
@@ -3262,12 +3359,13 @@ def main() -> None:
     _start_power_watcher()
 
     # Freeze watchdog — detects when the Qt main thread stops responding.
-    # A QTimer updates _heartbeat every second; a background thread restarts
-    # SH|RA if the heartbeat goes stale for more than 10 seconds.
+    # _heartbeat is updated every 100ms by a QTimer on the main thread.
+    # _freeze_watcher restarts SH|RA on freezes >10s.
+    # _stutter_watcher logs brief stalls (150ms–10s) to stutter_watchdog.log for diagnosis.
     _heartbeat = [time.monotonic()]
 
     _hb_timer = QTimer()
-    _hb_timer.setInterval(1000)
+    _hb_timer.setInterval(100)
     _hb_timer.timeout.connect(lambda: _heartbeat.__setitem__(0, time.monotonic()))
     _hb_timer.start()
 
@@ -3305,7 +3403,42 @@ def main() -> None:
                 _bridge.post(lambda: QTimer.singleShot(0, _do_restart))
                 time.sleep(30)  # back off — restart is already queued
 
-    threading.Thread(target=_freeze_watcher, daemon=True).start()
+    def _stutter_watcher():
+        import psutil
+        log_dir = os.path.join(os.path.dirname(__file__), "data", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "stutter_watchdog.log")
+        proc = psutil.Process()
+        _in_stutter = False
+        _stutter_start = 0.0
+        while True:
+            time.sleep(0.1)
+            stale = time.monotonic() - _heartbeat[0]
+            if stale > 0.15 and not _in_stutter:
+                _in_stutter = True
+                _stutter_start = time.monotonic()
+            elif stale <= 0.15 and _in_stutter:
+                _in_stutter = False
+                duration_ms = (time.monotonic() - _stutter_start) * 1000
+                try:
+                    cpu = proc.cpu_percent(interval=None)
+                    mb = proc.memory_info().rss / 1024 / 1024
+                    threads = proc.num_threads()
+                except Exception:
+                    cpu, mb, threads = -1, -1, -1
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(
+                            f"{time.strftime('%Y-%m-%d %H:%M:%S')}  "
+                            f"stall={duration_ms:.0f}ms  "
+                            f"cpu={cpu:.0f}%  rss={mb:.0f}MB  "
+                            f"threads={threads}\n"
+                        )
+                except Exception:
+                    pass
+
+    threading.Thread(target=_freeze_watcher, daemon=True, name="_freeze_watcher").start()
+    threading.Thread(target=_stutter_watcher, daemon=True, name="_stutter_watcher").start()
 
     root.show()
     _start_tray()

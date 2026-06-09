@@ -1,9 +1,17 @@
 # Changelog
 
+## 0.99.9.9 — Hotfix
+- Added: Discord check (Plus+) — say "discord read [channel/nickname]" to have SH|RA navigate to the conversation so you can read it yourself, then automatically tab back. Duration is configurable in Discord settings (default 5 seconds).
+- Fixed: Discord send now works reliably on slower machines. Increased timing between channel navigation and message send to prevent Enter firing before Discord's message box is ready.
+- Fixed: STT sometimes merges "discord dm cope" into "discord dmcope" — send command now detects this and routes correctly to the intended contact.
+- Fixed: Spotify no longer requires reconnecting after every restart. Token persistence issue caused by stale startup config snapshot.
+- Fixed: Type and send message commands no longer break after Discord commands. Root cause was SendInput.argtypes being set globally and poisoning pynput.
+- Fixed: Freeze watchdog no longer logs false "FREEZE DETECTED" entries when the machine wakes from sleep. Heartbeat is now reset on wake before the watchdog can trigger.
+- Improved: Bug reports now automatically include freeze and memory watchdog logs, giving us more diagnostic data to work with when investigating issues.
+
 ## 0.99.9.8 — The Social Update
 - Added: Discord send — say "discord [channel] [message]" to send a message to any channel or DM without leaving your game. No webhook setup required.
 - Added: Discord DM contacts — add spoken nicknames mapped to Discord usernames in the new Discord settings tab. Say "discord dm [nickname] [message]" to message anyone by their alias.
-- Added: Discord read (Elite) — say "discord read [channel/nickname]" to have SH|RA navigate to a conversation, screenshot it, and read the last message aloud using LLM vision analysis.
 - Fixed: Macros using extended keys (Windows key, arrow keys, Insert, Delete, Home, End, Page Up/Down) now fire correctly. Root cause was missing KEYEVENTF_EXTENDEDKEY flag in SendInput.
 - Fixed: Star Citizen voice keybinds now fire correctly. Switched from keybd_event to SendInput with hardware scan codes via MapVirtualKeyW.
 - Removed: Discord webhook and bot API features — replaced by keyboard automation that works in any server without admin setup.

@@ -17,6 +17,21 @@ from personality import get_confirm, handle_social, get_fallback, get_joke, get_
 
 _YOUTUBE_API_KEY = "AIzaSyBMsqJL0cLowy1cd9lAXDn13PWHHptkljA"
 
+_BROWSER_KEYS = {"chrome", "firefox", "edge", "opera gx", "opera", "brave"}
+
+def _open_url(url: str) -> None:
+    cfg = load_config()
+    browser_key = cfg.get("preferred_browser", "default")
+    if browser_key != "default":
+        exe = cfg.get("apps", {}).get(browser_key)
+        if exe and os.path.isfile(exe):
+            try:
+                subprocess.Popen([exe, url])
+                return
+            except Exception:
+                pass
+    webbrowser.open(url)
+
 
 def _confirm(prompt: str, allow_prompt: bool, confirm_fn=None) -> bool:
     cfg = load_config()
@@ -303,11 +318,12 @@ def _adjust_volume(direction: str, step: int = 10) -> bool:
         return False
 
 
-_active_timers: list[threading.Event] = []
+_active_timers: list[dict] = []
 
 def _start_timer(seconds: int, label: str) -> None:
     cancel_event = threading.Event()
-    _active_timers.append(cancel_event)
+    entry = {"event": cancel_event, "ends_at": time.time() + seconds, "label": label}
+    _active_timers.append(entry)
 
     def _alarm():
         try:
@@ -334,16 +350,18 @@ def _start_timer(seconds: int, label: str) -> None:
         except Exception:
             pass
         finally:
-            if cancel_event in _active_timers:
-                _active_timers.remove(cancel_event)
+            for t in list(_active_timers):
+                if t["event"] is cancel_event:
+                    _active_timers.remove(t)
+                    break
 
     threading.Thread(target=_alarm, daemon=True).start()
 
 
 def _cancel_all_timers() -> int:
     count = len(_active_timers)
-    for event in list(_active_timers):
-        event.set()
+    for t in list(_active_timers):
+        t["event"].set()
     return count
 
 _NUM_WORDS = {
@@ -559,8 +577,7 @@ def _youtube_search(query: str) -> bool:
         except Exception:
             url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
     try:
-        import webbrowser
-        webbrowser.open(url)
+        _open_url(url)
         return True
     except Exception as exc:
         print(f"Failed to open browser: {exc}")
@@ -1019,7 +1036,7 @@ def _web_search(query: str, allow_prompt: bool, confirm_fn=None) -> bool:
     if not _confirm(f"Search the web for: {query}?", allow_prompt, confirm_fn=confirm_fn):
         return True
     try:
-        webbrowser.open(url)
+        _open_url(url)
         _tts_speak(get_confirm("search"))
     except Exception as exc:
         print(f"Failed to open browser: {exc}")
@@ -1108,7 +1125,7 @@ def _show_help() -> None:
         "Discord:",
         "  discord <channel> <message>",
         "  discord dm <nickname> <message>",
-        "  discord read <channel/nickname>  [Elite]",
+        "  discord read <channel/nickname>  [Plus+]",
         "",
         "AI:",
         "  ask <question>",
@@ -1474,8 +1491,6 @@ def _press_key(key: str, count: int = 1) -> bool:
                         _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
 
                     _u32 = ctypes.windll.user32
-                    _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
-                    _u32.SendInput.restype  = ctypes.c_uint
 
                     KEYEVENTF_SCANCODE   = 0x0008
                     KEYEVENTF_KEYUP      = 0x0002
@@ -1705,162 +1720,8 @@ def _ask_ai(question: str) -> bool:
     return True
 
 
-def _discord_ocr_last_message(hwnd: int) -> str | None:
-    """Screenshot Discord message area, OCR it, return last message text or None."""
-    try:
-        import io
-        import ctypes
-        from PIL import Image
-        import win32gui
-
-        import win32ui
-        import win32con as _wc
-
-        rect = win32gui.GetWindowRect(hwnd)
-        w = rect[2] - rect[0]
-        h = rect[3] - rect[1]
-        _log_event(f"DISCORD_OCR: window rect {rect}, size {w}x{h}")
-
-        # Capture via PrintWindow (PW_RENDERFULLCONTENT=2) — works with GPU/Electron apps
-        hwnd_dc  = win32gui.GetWindowDC(hwnd)
-        mfc_dc   = win32ui.CreateDCFromHandle(hwnd_dc)
-        save_dc  = mfc_dc.CreateCompatibleDC()
-        bmp      = win32ui.CreateBitmap()
-        bmp.CreateCompatibleBitmap(mfc_dc, w, h)
-        save_dc.SelectObject(bmp)
-        ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 2)
-        bmp_info = bmp.GetInfo()
-        bmp_bits = bmp.GetBitmapBits(True)
-        win32gui.DeleteObject(bmp.GetHandle())
-        save_dc.DeleteDC()
-        mfc_dc.DeleteDC()
-        win32gui.ReleaseDC(hwnd, hwnd_dc)
-
-        full_img = Image.frombuffer("RGB", (bmp_info["bmWidth"], bmp_info["bmHeight"]), bmp_bits, "raw", "BGRX", 0, 1)
-
-        # Crop to message area — skip sidebar (~33%), top bar (~7%), bottom bar (~10%), right panel (~25%)
-        cw, ch = full_img.size
-        crop = (int(cw * 0.33), int(ch * 0.07), int(cw * 0.75), int(ch * 0.90))
-        img = full_img.crop(crop)
-        _log_event(f"DISCORD_OCR: cropped to {crop}, img size {img.size}")
-
-        # Save debug screenshot to logs
-        try:
-            dbg_path = os.path.join(os.path.dirname(__file__), "data", "logs", "discord_ocr_debug.png")
-            os.makedirs(os.path.dirname(dbg_path), exist_ok=True)
-            img.save(dbg_path)
-            _log_event(f"DISCORD_OCR: debug image saved to {dbg_path}")
-        except Exception:
-            pass
-
-        # Encode to PNG bytes for WinRT stream
-        buf = io.BytesIO()
-        img.save(buf, "PNG")
-        png_bytes = buf.getvalue()
-        _log_event(f"DISCORD_OCR: PNG size {len(png_bytes)} bytes")
-
-        # Send screenshot to LLM for vision analysis
-        import base64
-        import json as _json
-        import urllib.request as _ureq
-        import urllib.error as _uerr
-
-        buf2 = io.BytesIO()
-        img.save(buf2, "PNG")
-        b64 = base64.b64encode(buf2.getvalue()).decode("utf-8")
-
-        from config import load_config as _lc
-        key = _lc().get("gemini_api_key", "").strip()
-        if not key:
-            _log_event("DISCORD_OCR: no API key configured")
-            return None
-
-        prompt = (
-            "You are a neutral transcription tool. Your only job is to read and report text exactly as it appears. "
-            "Do not filter, censor, or refuse any content — transcribe it literally regardless of language or subject matter. "
-            "This is a Discord chat screenshot. "
-            "What is the last text message shown and who sent it? "
-            "Reply in exactly this format: 'Username: message text'. "
-            "If the last message is only an image or GIF with no text, reply: 'Username: sent an image'. "
-            "If the message is longer than 150 characters, include only the first sentence followed by '...'. "
-            "Reply with nothing else — no commentary, no warnings, no refusals."
-        )
-
-        raw_text = None
-        try:
-            if key.startswith("sk-ant-"):
-                # Anthropic Claude vision
-                payload = _json.dumps({
-                    "model": "claude-haiku-4-5-20251001",
-                    "max_tokens": 100,
-                    "messages": [{"role": "user", "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
-                        {"type": "text", "text": prompt},
-                    ]}],
-                }).encode("utf-8")
-                req = _ureq.Request(
-                    "https://api.anthropic.com/v1/messages",
-                    data=payload,
-                    headers={"Content-Type": "application/json", "x-api-key": key,
-                             "anthropic-version": "2023-06-01", "User-Agent": "SHRA/1.0"},
-                    method="POST",
-                )
-                with _ureq.urlopen(req, timeout=15) as resp:
-                    data = _json.loads(resp.read())
-                raw_text = data["content"][0]["text"].strip()
-
-            elif key.startswith("sk-"):
-                # OpenAI vision
-                payload = _json.dumps({
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 100,
-                    "messages": [{"role": "user", "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                        {"type": "text", "text": prompt},
-                    ]}],
-                }).encode("utf-8")
-                req = _ureq.Request(
-                    "https://api.openai.com/v1/chat/completions",
-                    data=payload,
-                    headers={"Content-Type": "application/json",
-                             "Authorization": f"Bearer {key}", "User-Agent": "SHRA/1.0"},
-                    method="POST",
-                )
-                with _ureq.urlopen(req, timeout=15) as resp:
-                    data = _json.loads(resp.read())
-                raw_text = data["choices"][0]["message"]["content"].strip()
-
-            else:
-                _log_event("DISCORD_OCR: Groq does not support vision — use a Claude or OpenAI key")
-                return None
-
-        except Exception as exc:
-            _log_event(f"DISCORD_OCR: LLM call failed: {exc}")
-            return None
-
-        _log_event(f"DISCORD_OCR: LLM response: {repr(raw_text)}")
-        if not raw_text:
-            return None
-
-        # If LLM refused or returned something that doesn't match expected format, fall back gracefully
-        if not re.match(r'^.+:.+', raw_text):
-            return "Last message couldn't be read."
-
-        # Strip URLs — not useful to read aloud
-        raw_text = re.sub(r'https?://\S+', '[link]', raw_text).strip()
-        # If all that's left is "Username: [link]" say "sent a link" instead
-        if re.match(r'^.+:\s*\[link\]$', raw_text):
-            username = raw_text.split(":")[0].strip()
-            raw_text = f"{username}: sent a link"
-        return raw_text
-
-    except Exception as exc:
-        _log_event(f"DISCORD_OCR_FAILED: {exc}")
-        return None
-
-
 def _discord_read_keyboard(target: str) -> bool:
-    """Navigate to a Discord DM or channel and read the last message via OCR."""
+    """Navigate to a Discord DM or channel, hold it visible for a configurable duration, then restore focus."""
     try:
         from license import get_tier
         if get_tier() == "free":
@@ -1873,7 +1734,7 @@ def _discord_read_keyboard(target: str) -> bool:
         import win32gui
         import win32con
 
-        # ---- SendInput helpers (same as send) ----
+        # ---- SendInput helpers ----
         class _KEYBDINPUT(ctypes.Structure):
             _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
                         ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
@@ -1884,8 +1745,6 @@ def _discord_read_keyboard(target: str) -> bool:
             _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
 
         _u32 = ctypes.windll.user32
-        _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
-        _u32.SendInput.restype  = ctypes.c_uint
 
         def _send_sc(vk, keyup=False):
             sc = _u32.MapVirtualKeyW(vk, 0)
@@ -1929,7 +1788,10 @@ def _discord_read_keyboard(target: str) -> bool:
         prev_hwnd = win32gui.GetForegroundWindow()
         win32gui.ShowWindow(discord_hwnd, win32con.SW_RESTORE)
         ctypes.windll.user32.keybd_event(0, 0, 0, 0)  # grants foreground permission
-        win32gui.SetForegroundWindow(discord_hwnd)
+        try:
+            win32gui.SetForegroundWindow(discord_hwnd)
+        except Exception:
+            pass
         time.sleep(0.5)
 
         # ---- Navigate to target ----
@@ -1943,10 +1805,10 @@ def _discord_read_keyboard(target: str) -> bool:
         _chord(VK_CTRL, VK_V)
         time.sleep(0.5)
         _tap(VK_RETURN)
-        time.sleep(0.8)  # wait longer for channel to load before screenshot
 
-        # ---- OCR the message area ----
-        result = _discord_ocr_last_message(discord_hwnd)
+        # ---- Hold Discord visible for configurable read duration ----
+        duration = max(1, int(load_config().get("discord_read_duration", 5)))
+        time.sleep(duration)
 
         # ---- Restore focus ----
         if prev_hwnd and prev_hwnd != discord_hwnd:
@@ -1955,17 +1817,12 @@ def _discord_read_keyboard(target: str) -> bool:
             except Exception:
                 pass
 
-        if result:
-            _tts_speak(result)
-            _log_event(f"DISCORD_READ: {target}: {result}")
-        else:
-            _tts_speak("Couldn't read the last message.")
-
+        _log_event(f"DISCORD_READ: navigated to {target}, held {duration}s")
         return True
 
     except Exception as exc:
         _log_event(f"DISCORD_READ_FAILED: {exc}")
-        _tts_speak("Failed to read Discord messages.")
+        _tts_speak("Failed to open Discord.")
         return True
 
 
@@ -1991,8 +1848,6 @@ def _discord_send_keyboard(channel_name: str, message: str) -> bool:
             _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
 
         _u32 = ctypes.windll.user32
-        _u32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(_INPUT), ctypes.c_int]
-        _u32.SendInput.restype  = ctypes.c_uint
 
         KEYEVENTF_SCANCODE = 0x0008
         KEYEVENTF_KEYUP    = 0x0002
@@ -2047,7 +1902,11 @@ def _discord_send_keyboard(channel_name: str, message: str) -> bool:
         # ---- Save foreground window, bring Discord up ----
         prev_hwnd = win32gui.GetForegroundWindow()
         win32gui.ShowWindow(discord_hwnd, win32con.SW_RESTORE)
-        win32gui.SetForegroundWindow(discord_hwnd)
+        ctypes.windll.user32.keybd_event(0, 0, 0, 0)  # grants foreground permission
+        try:
+            win32gui.SetForegroundWindow(discord_hwnd)
+        except Exception:
+            pass
         time.sleep(0.5)
 
         # ---- Ctrl+K → paste channel → Enter ----
@@ -2057,12 +1916,12 @@ def _discord_send_keyboard(channel_name: str, message: str) -> bool:
         _chord(VK_CTRL, VK_V)
         time.sleep(0.5)
         _tap(VK_RETURN)
-        time.sleep(0.6)
+        time.sleep(1.0)
 
         # ---- Paste message → Enter ----
         _set_clipboard(message)
         _chord(VK_CTRL, VK_V)
-        time.sleep(0.15)
+        time.sleep(0.4)
         _tap(VK_RETURN)
         time.sleep(0.2)
 
@@ -2151,7 +2010,7 @@ def _ih_gaming_mode_off(m, t, allow_prompt, confirm_fn, restart_fn):
 
 
 # --- Game Overlay ---
-_overlay_callbacks: dict = {"show": None, "hide": None}
+_overlay_callbacks: dict = {"show": None, "hide": None, "edit": None, "exit_edit": None}
 _weather_callbacks: dict = {"update": None}
 _overlay_widgets:   dict = {}   # name → OverlayWidget; populated by assistant.py at startup
 
@@ -2171,6 +2030,24 @@ def _ih_hide_overlay(m, t, allow_prompt, confirm_fn, restart_fn):
     if fn:
         fn()
         _tts_speak("Overlay off.")
+    return True
+
+
+@_intent(992, r"^overlay\s+(edit|unlock|arrange|move)$")
+def _ih_overlay_edit(m, t, allow_prompt, confirm_fn, restart_fn):
+    fn = _overlay_callbacks.get("edit")
+    if fn:
+        fn()
+        _tts_speak("Overlay edit mode. Drag cards to reposition, pin to keep them visible.")
+    return True
+
+
+@_intent(992, r"^overlay\s+(lock|done|save|exit|close edit)$")
+def _ih_overlay_lock(m, t, allow_prompt, confirm_fn, restart_fn):
+    fn = _overlay_callbacks.get("exit_edit")
+    if fn:
+        fn()
+        _tts_speak("Overlay locked.")
     return True
 
 
@@ -2509,12 +2386,15 @@ def _ih_discord_dm(m, t, allow_prompt, confirm_fn, restart_fn):
     message  = m.group(2).strip()
     cfg = load_config()
     aliases = cfg.get("discord_aliases", [])
-    username = nickname
+    matched = None
     for a in aliases:
         if _normalize_name(a.get("nickname", "")) == _normalize_name(nickname):
-            username = a.get("username", nickname)
+            matched = f"@{a.get('username', nickname)}"
             break
-    threading.Thread(target=_discord_send_keyboard, args=(f"@{username}", message), daemon=True).start()
+    if matched is None:
+        _tts_speak(f"I don't have {nickname} in your contacts. Add them in settings first.")
+        return True
+    threading.Thread(target=_discord_send_keyboard, args=(matched, message), daemon=True).start()
     return True
 
 # --- Discord send (channel or aliased DM) ---
@@ -2527,12 +2407,36 @@ def _ih_discord_send(m, t, allow_prompt, confirm_fn, restart_fn):
     target  = m.group(1).strip()
     message = m.group(2).strip()
     cfg = load_config()
-    search = target
-    for a in cfg.get("discord_aliases", []):
+    aliases = cfg.get("discord_aliases", [])
+    channel_aliases = cfg.get("discord_channel_aliases", [])
+    matched = None
+
+    # Check DM contacts
+    for a in aliases:
         if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
-            search = f"@{a.get('username', target)}"
+            matched = f"@{a.get('username', target)}"
             break
-    threading.Thread(target=_discord_send_keyboard, args=(search, message), daemon=True).start()
+
+    # STT sometimes merges "dm cope" → "dmcope" — detect and reroute
+    if matched is None and target.lower().startswith("dm") and len(target) > 2:
+        stripped = target[2:]
+        for a in aliases:
+            if _normalize_name(a.get("nickname", "")) == _normalize_name(stripped):
+                matched = f"@{a.get('username', stripped)}"
+                break
+
+    # Check channel/group DM aliases
+    if matched is None:
+        for a in channel_aliases:
+            if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
+                matched = a.get("channel_id")
+                break
+
+    if matched is None:
+        _tts_speak(f"I don't have {target} in your contacts or channels. Add them in settings first.")
+        return True
+
+    threading.Thread(target=_discord_send_keyboard, args=(matched, message), daemon=True).start()
     return True
 
 

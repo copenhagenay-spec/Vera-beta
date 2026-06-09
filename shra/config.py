@@ -50,6 +50,11 @@ _WELL_KNOWN_APPS = {
     "opera": [
         os.path.join(os.path.expanduser("~"), r"AppData\Local\Programs\Opera\opera.exe"),
     ],
+    "brave": [
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+        r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+        os.path.join(os.path.expanduser("~"), r"AppData\Local\BraveSoftware\Brave-Browser\Application\brave.exe"),
+    ],
     "notepad": [r"C:\Windows\notepad.exe"],
     "calculator": [r"C:\Windows\System32\calc.exe"],
     "steam": [

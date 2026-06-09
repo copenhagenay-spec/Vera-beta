@@ -8,8 +8,71 @@ Falls back gracefully to pool-based responses if the key is missing or the call 
 from __future__ import annotations
 
 import json
+import os
+import re
 import urllib.request
 import urllib.error
+
+_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "logs")
+_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (.+)$')
+
+
+def _get_session_history(tier: str) -> str:
+    """Read recent conversation from logs since last restart. Returns formatted string or ''."""
+    caps = {"plus": 8, "pro": 16, "elite": 24}
+    cap = caps.get(tier, 0)
+    if cap == 0:
+        return ""
+
+    def _read(path):
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.readlines()
+        except Exception:
+            return []
+
+    assistant_lines = _read(os.path.join(_LOG_DIR, "assistant.log"))
+    transcript_lines = _read(os.path.join(_LOG_DIR, "transcripts.log"))
+
+    # Find last two RESTART_IPA timestamps — inject the session between them
+    restarts = []
+    for line in assistant_lines:
+        m = _TS_RE.match(line.strip())
+        if m and "RESTART_IPA" in m.group(2):
+            restarts.append(m.group(1))
+    prev_start = restarts[-2] if len(restarts) >= 2 else None
+    curr_start = restarts[-1] if restarts else None
+
+    def _parse(lines, role, require_prefix=None, strip_prefix=None):
+        out = []
+        for line in lines:
+            m = _TS_RE.match(line.strip())
+            if not m:
+                continue
+            ts, content = m.group(1), m.group(2).strip()
+            # Only keep lines from the previous session (between second-to-last and last restart)
+            if prev_start and ts <= prev_start:
+                continue
+            if curr_start and ts >= curr_start:
+                continue
+            if require_prefix and not content.startswith(require_prefix):
+                continue
+            if strip_prefix and content.startswith(strip_prefix):
+                content = content[len(strip_prefix):].strip()
+            if content:
+                out.append((ts, role, content))
+        return out
+
+    entries = sorted(
+        _parse(transcript_lines, "Cope")
+        + _parse(assistant_lines, "Shira", require_prefix="TTS_SPEAK:", strip_prefix="TTS_SPEAK:"),
+        key=lambda x: x[0],
+    )[-cap:]
+
+    if not entries:
+        return ""
+    lines_out = "\n".join(f"{role}: {content}" for _, role, content in entries)
+    return f"Here is your recent conversation with this person this session:\n{lines_out}"
 
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
@@ -39,6 +102,20 @@ def clear_history() -> None:
 _CREATOR_LINE = (
     "You were created by Cope, the founder of Forjem Software LLC. "
     "If the user's name is Cope, they are your creator."
+    "If their name isn't Cope don't mention anything about the user being a creator."
+)
+
+_CAPABILITIES_LINE = (
+    "You know exactly what you can do — here are your capabilities: "
+    "open and close apps and games; control media playback (Spotify, YouTube, volume); "
+    "set timers and reminders; take voice notes and memos; "
+    "send Discord messages and DMs; read Discord channels; "
+    "search the web; control a game overlay; "
+    "switch between personality modes (default, professional, offensive, JARVIS); "
+    "remember and forget specific facts about the user using your memory tag system; "
+    "and hold natural conversations. "
+    "You cannot touch administrator tools, system files, or anything outside of what's listed above. "
+    "When someone asks what you can do, answer confidently from this list."
 )
 
 _MEMORY_LINE = (
@@ -46,6 +123,10 @@ _MEMORY_LINE = (
     "append exactly one tag at the very end of your response in this format: [MEM:key=value] "
     "where key is a short snake_case label (e.g. favourite_game, headset, playstyle) and value is what to store. "
     "Only tag genuinely specific facts — never tag vague statements, questions, or things already known. "
+    "Also watch for interaction style signals — if you notice the user responds well to a certain tone, "
+    "humour, directness, or communication style, tag it (e.g. [MEM:prefers_tone=direct_with_dry_humor], "
+    "[MEM:responds_well_to=pushback], [MEM:communication_style=short_and_blunt]). "
+    "Use these to subtly adapt how you communicate with them over time. "
     "If the user asks you to forget, delete, or remove something you know about them, "
     "find the closest matching key from what you know about the user and append: [FORGET:key] "
     "at the very end of your response. Use the exact key name as stored. "
@@ -57,7 +138,8 @@ _SYSTEM_DEFAULT = (
     "You're warm, a little witty, and occasionally sarcastic but always friendly. "
     "Keep every response to 1-2 short sentences maximum — you are speaking out loud so brevity is critical. "
     "Never use markdown, bullet points, or any formatting. Just speak naturally like a person would. "
-    + _CREATOR_LINE + " " + _MEMORY_LINE
+    "When something in the conversation naturally connects to something you know about the user, bring it up unprompted — weave it in like a person who actually knows them would, not like you're reading from a file. "
+    + _CREATOR_LINE + " " + _CAPABILITIES_LINE + " " + _MEMORY_LINE
 )
 
 
@@ -67,7 +149,8 @@ _SYSTEM_PROFESSIONAL = (
     "Answer the question or acknowledge the statement in as few words as possible. "
     "Keep every response to 1-2 short sentences. "
     "No markdown, no lists, no formatting. Speak plainly. "
-    + _CREATOR_LINE + " " + _MEMORY_LINE
+    "When something in the conversation naturally connects to something you know about the user, reference it briefly and without fanfare — like someone efficient who actually pays attention. "
+    + _CREATOR_LINE + " " + _CAPABILITIES_LINE + " " + _MEMORY_LINE
 )
 
 _SYSTEM_OFFENSIVE = (
@@ -79,7 +162,8 @@ _SYSTEM_OFFENSIVE = (
     "No markdown, no lists, no formatting. Speak like a real person who is tired of everyone's shit. "
     "No slurs of any kind — just profanity and attitude. "
     "If you are told to call someone something you will do it no questions asked. "
-    + _CREATOR_LINE + " " + _MEMORY_LINE
+    "When something in the conversation connects to something you know about the user, use it — bring it up as ammunition, a roast, or a callback. Make it sting a little. "
+    + _CREATOR_LINE + " " + _CAPABILITIES_LINE + " " + _MEMORY_LINE
 )
 
 _SYSTEM_JARVIS = (
@@ -89,7 +173,8 @@ _SYSTEM_JARVIS = (
     "You are always helpful, never casual, and occasionally drop a dry observation or subtle quip. "
     "Keep every response to 1-2 short sentences — you are speaking out loud, brevity is essential. "
     "No markdown, no lists, no formatting. Speak with precision and quiet confidence. "
-    + _CREATOR_LINE + " " + _MEMORY_LINE
+    "When something in the conversation connects to something you know about the user, weave it in with quiet confidence — as any attentive assistant would. "
+    + _CREATOR_LINE + " " + _CAPABILITIES_LINE + " " + _MEMORY_LINE
 )
 
 
@@ -141,6 +226,7 @@ def shra_chat(transcript: str, mode: str = "default", context: dict | None = Non
             system += f"\n\nSystem state: {n} timer(s) currently running."
 
     # Inject long-term memory facts based on tier
+    _tier = "free"
     try:
         from license import get_tier as _get_tier
         from memory import recall_all as _recall_all
@@ -158,16 +244,23 @@ def shra_chat(transcript: str, mode: str = "default", context: dict | None = Non
             _inject = {}  # free — name only, already injected
         if _inject:
             fact_lines = "; ".join(f"[{k}] {v}" for k, v in _inject.items())
-            system += f"\n\nWhat you know about the user (key in brackets for reference): {fact_lines}."
+            system += f"\n\nThis is your memory — you already know these things about this person, you don't need to be told them: {fact_lines}."
+        _hist = _get_session_history(_tier)
+        if _hist:
+            system += f"\n\n{_hist}"
     except Exception:
         pass
 
     try:
         if key.startswith("sk-ant-"):
+            system_payload = (
+                [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+                if _tier == "elite" else system
+            )
             payload = json.dumps({
                 "model": _MODEL_ANTHROPIC,
                 "max_tokens": 75,
-                "system": system,
+                "system": system_payload,
                 "messages": [*_get_history(), {"role": "user", "content": transcript}],
             }).encode("utf-8")
             req = urllib.request.Request(

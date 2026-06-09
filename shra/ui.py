@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QSpacerItem,
 )
 from PySide6.QtCore import Qt, Signal, QObject, QSize, QUrl, QTimer
-from PySide6.QtGui import QFont, QPixmap, QColor, QIcon, QPainter
+from PySide6.QtGui import QFont, QPixmap, QColor, QIcon, QPainter, QMovie
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink
 
 
@@ -62,6 +62,15 @@ _PREMIUM_THEMES: dict[str, dict] = {
     },
     "Emerald": {
         "folder": "emerald",
+        "icon_active": "#ffffff",
+        "accent_rgb":  (52, 211, 112),
+        "button_rgb":  (36, 160, 82),
+        "gradient": "stop:0 #0c1410, stop:1 #101a10",
+        "card_surface": "#0e1a10",
+        "title_color": "#c8ffe8",
+    },
+    "Emerald II": {
+        "folder": "emerald_alternative",
         "icon_active": "#ffffff",
         "accent_rgb":  (52, 211, 112),
         "button_rgb":  (36, 160, 82),
@@ -476,7 +485,8 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     language        = state["language"]
     ptt_key         = state["ptt_key"]
     ptt_key_display = state["ptt_key_display"]
-    search_engine   = state["search_engine"]
+    search_engine     = state["search_engine"]
+    preferred_browser = state["preferred_browser"]
     confirm_actions = state["confirm_actions"]
     idle_chatter    = state["idle_chatter"]
     ptt_beep_volume = state["ptt_beep_volume"]
@@ -503,6 +513,9 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     alias_target_var = state["alias_target_var"]
     discord_alias_nickname_var = state["discord_alias_nickname_var"]
     discord_alias_username_var = state["discord_alias_username_var"]
+    discord_channel_alias_nickname_var = state["discord_channel_alias_nickname_var"]
+    discord_channel_alias_id_var       = state["discord_channel_alias_id_var"]
+    discord_read_duration_var  = state["discord_read_duration_var"]
     phrase_var      = state["phrase_var"]
     command_var     = state["command_var"]
     gemini_api_key_var   = state["gemini_api_key_var"]
@@ -533,6 +546,8 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     _remove_alias        = callbacks["remove_alias"]
     _add_discord_alias   = callbacks["add_discord_alias"]
     _remove_discord_alias = callbacks["remove_discord_alias"]
+    _add_discord_channel_alias    = callbacks["add_discord_channel_alias"]
+    _remove_discord_channel_alias = callbacks["remove_discord_channel_alias"]
     _add_action          = callbacks["add_action"]
     _remove_action       = callbacks["remove_action"]
     _record_hotkey       = callbacks["record_hotkey"]
@@ -599,18 +614,28 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     home_area, home_inner, home_vl = _scrollable_tab()
     stack.addWidget(home_area)
 
-    _bg_frame_ref  = [None]  # current QPixmap painted by home_inner.paintEvent
-    _bg_player_ref = [None]  # QMediaPlayer for MP4 backgrounds
-    _bg_sink_ref   = [None]  # QVideoSink for MP4 frame capture
+    _bg_frame_ref   = [None]   # current QPixmap painted by home_inner.paintEvent
+    _bg_movie_ref   = [None]   # QMovie for animated WebP backgrounds
+    _bg_movie_path  = [""]     # path of the currently loaded WebP — guards double-init
+    _bg_player_ref  = [None]   # QMediaPlayer for MP4 backgrounds (fallback)
+    _bg_sink_ref    = [None]   # QVideoSink for MP4 frame capture
+    _bg_last_paint  = [0.0]    # monotonic time of last repaint — rate-limiter
 
     _vc = state.get("video_ctrl")
     if _vc is not None:
-        _vc["pause"]  = lambda: _bg_player_ref[0].pause() if _bg_player_ref[0] else None
-        _vc["resume"] = lambda: _bg_player_ref[0].play()  if _bg_player_ref[0] else None
+        def _bg_pause():
+            if _bg_movie_ref[0]: _bg_movie_ref[0].setPaused(True)
+            elif _bg_player_ref[0]: _bg_player_ref[0].pause()
+        def _bg_resume():
+            if _bg_movie_ref[0]: _bg_movie_ref[0].setPaused(False)
+            elif _bg_player_ref[0]: _bg_player_ref[0].play()
+        _vc["pause"]  = _bg_pause
+        _vc["resume"] = _bg_resume
     _knob_btn_ref  = [None]  # mutable ref so theme switcher can update knob image
     _nav_btns      = []      # populated later; empty list guards early _apply_home_theme calls
     _COLOR_ACTIVE  = [_PREM_ACCENT if is_premium() else _ACCENT]  # mutable so theme can update it
-    _theme_seg_btns   = []   # [seg_hold, seg_toggle, seg_wake] — set after settings tab is built
+    _theme_seg_btns        = []    # [seg_hold, seg_toggle, seg_wake] — set after settings tab is built
+    _theme_seg_active_style = [""]  # mutable so theme switcher and _seg_select stay in sync
     _theme_slider_ref = [None]  # beep volume slider
     _theme_title_ref  = [None]  # home tab SH|RA+ title label
     _theme_logo_ref   = [None]  # home tab logo QLabel
@@ -630,22 +655,50 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         import os as _os_bg
         theme = _PREMIUM_THEMES.get(theme_name, {})
         _theme_dir = _os_bg.path.join(_os_bg.path.dirname(_os_bg.path.abspath(__file__)), "data", "assets", "themes", theme.get("folder", ""))
-        bg_path  = _os_bg.path.join(_theme_dir, "background.mp4")
-        is_video = _os_bg.path.isfile(bg_path)
+        bg_path   = _os_bg.path.join(_theme_dir, "background.mp4")
+        webp_path = _os_bg.path.join(_theme_dir, "background.webp")
+        is_webp   = _os_bg.path.isfile(webp_path)
+        is_video  = _os_bg.path.isfile(bg_path)
 
-        if _bg_player_ref[0]:
+        # Stop whatever is currently playing only if we're switching format/file
+        if _bg_movie_ref[0] is not None and _bg_movie_path[0] != webp_path:
+            _bg_movie_ref[0].stop()
+            _bg_movie_ref[0] = None
+            _bg_movie_path[0] = ""
+        if _bg_player_ref[0] is not None:
             _bg_player_ref[0].stop()
+            if is_webp:
+                # Switching to WebP — fully release the MP4 player
+                _bg_player_ref[0].setSource(QUrl())
 
-        if not is_video:
+        if is_webp:
+            # QMovie handles animated WebP entirely in Qt — no WMF, no decoder threads,
+            # no blocking seeks, no loop stutter
+            if _bg_movie_path[0] != webp_path:
+                movie = QMovie(webp_path)
+                def _on_movie_frame(_frame_nr, _ref=_bg_frame_ref, _m=movie):
+                    _ref[0] = _m.currentPixmap()
+                    home_inner.update()
+                movie.frameChanged.connect(_on_movie_frame)
+                movie.start()
+                _bg_movie_ref[0] = movie
+                _bg_movie_path[0] = webp_path
+        elif not is_video:
             _bg_frame_ref[0] = None
             home_inner.update()
         elif is_video:
             if _bg_player_ref[0] is None:
                 sink = QVideoSink()
-                def _on_frame(frame):
+                import time as _bgtime
+                _FRAME_INTERVAL = 1 / 30  # cap repaints at 30fps
+                def _on_frame(frame, _ref=_bg_frame_ref, _last=_bg_last_paint):
+                    now = _bgtime.monotonic()
+                    if now - _last[0] < _FRAME_INTERVAL:
+                        return
+                    _last[0] = now
                     img = frame.toImage()
                     if not img.isNull():
-                        _bg_frame_ref[0] = QPixmap.fromImage(img)
+                        _ref[0] = QPixmap.fromImage(img)
                         home_inner.update()
                 sink.videoFrameChanged.connect(_on_frame)
                 _bg_sink_ref[0] = sink
@@ -658,9 +711,8 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
                 player.setLoops(QMediaPlayer.Infinite)
                 _bg_player_ref[0] = player
 
-            if _bg_player_ref[0].source().toLocalFile() != bg_path:
-                _bg_player_ref[0].setSource(QUrl.fromLocalFile(bg_path))
-                _bg_player_ref[0].play()
+            _bg_player_ref[0].setSource(QUrl.fromLocalFile(bg_path))
+            _bg_player_ref[0].play()
         # --- logo ---
         if _theme_logo_ref[0] is not None:
             _logo_path = _os_bg.path.join(_theme_dir, "logo.png")
@@ -721,6 +773,7 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
                 "QPushButton { background-color: transparent; color: #aaaaaa;"
                 " border: none; padding: 6px 18px; font-size: 12px; }"
             )
+            _theme_seg_active_style[0] = _seg_active_style
             from config import load_config as _lc
             _cur_mode = _lc().get("mode", "hold")
             _mode_map = {_theme_seg_btns[0]: "hold", _theme_seg_btns[1]: "toggle", _theme_seg_btns[2]: "wake"}
@@ -997,12 +1050,14 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         seg_layout.addWidget(btn)
+    _theme_seg_active_style[0] = _SEG_ACTIVE
     if is_premium():
         _theme_seg_btns.extend([seg_hold, seg_toggle, seg_wake])
 
     def _seg_select(active_mode: str):
+        active_style = _theme_seg_active_style[0] or _SEG_ACTIVE
         for btn, m in ((seg_hold, "hold"), (seg_toggle, "toggle"), (seg_wake, "wake")):
-            btn.setStyleSheet(_SEG_ACTIVE if m == active_mode else _SEG_INACTIVE)
+            btn.setStyleSheet(active_style if m == active_mode else _SEG_INACTIVE)
 
     def _sync_mode_radios():
         _seg_select(mode.get())
@@ -1100,6 +1155,26 @@ def build_ui(window, state: dict, callbacks: dict, constants: dict):
     se_edit.setText(search_engine.get())
     se_edit.textChanged.connect(search_engine.set)
     rec_vl.addWidget(_hrow(se_lbl, se_edit))
+
+    # Preferred browser row
+    from config import _WELL_KNOWN_APPS, load_config as _lc_br
+    import os as _os_br
+    _br_cfg = _lc_br()
+    _browser_keys = {"chrome", "firefox", "edge", "opera gx", "opera", "brave"}
+    _installed_browsers = [k for k in _browser_keys if _os_br.path.isfile(_br_cfg.get("apps", {}).get(k, ""))]
+    _browser_choices = ["default"] + sorted(_installed_browsers)
+    br_lbl = QLabel("Preferred Browser")
+    br_lbl.setFixedWidth(120)
+    br_lbl.setStyleSheet(f"color: {_TEXT};")
+    br_combo = _make_combo([b.title() if b != "default" else "Default (OS)" for b in _browser_choices], 200)
+    _br_current = preferred_browser.get()
+    _br_display = _br_current.title() if _br_current != "default" else "Default (OS)"
+    if _br_display in [br_combo.itemText(i) for i in range(br_combo.count())]:
+        br_combo.setCurrentText(_br_display)
+    def _on_browser_changed(text):
+        preferred_browser.set("default" if text == "Default (OS)" else text.lower())
+    br_combo.currentTextChanged.connect(_on_browser_changed)
+    rec_vl.addWidget(_hrow(br_lbl, br_combo))
 
     # Beep volume row
     bv_lbl = QLabel("Beep Volume")
@@ -1668,6 +1743,52 @@ _danger_btn("Remove Selected", _remove_app),
         _primary_btn("Add Contact", _add_discord_alias),
         _danger_btn("Remove Selected", _remove_discord_alias),
     ))
+
+    for w in _section_label("Channel & Group DM Aliases", "Map a spoken name to a Discord channel or group DM ID.\nSay: discord <nickname> <message>"):
+        discord_vl.addWidget(w)
+
+    discord_channel_aliases_textbox = _make_listbox(5)
+    discord_vl.addWidget(discord_channel_aliases_textbox)
+
+    dc_card = _card_frame()
+    dc_cvl = QVBoxLayout(dc_card)
+    dc_cvl.setContentsMargins(12, 8, 12, 8)
+    dc_nick_lbl = QLabel("Nickname")
+    dc_nick_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    dc_nick_edit = _make_entry(200, "e.g. general")
+    dc_nick_edit.textChanged.connect(discord_channel_alias_nickname_var.set)
+    dc_cvl.addWidget(_hrow(dc_nick_lbl, dc_nick_edit))
+    dc_id_lbl = QLabel("Channel ID")
+    dc_id_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 120px;")
+    dc_id_edit = _make_entry(200, "e.g. 123456789012345678")
+    dc_id_edit.textChanged.connect(discord_channel_alias_id_var.set)
+    dc_cvl.addWidget(_hrow(dc_id_lbl, dc_id_edit))
+    discord_vl.addWidget(dc_card)
+    discord_vl.addWidget(_hrow(
+        _primary_btn("Add Channel", _add_discord_channel_alias),
+        _danger_btn("Remove Selected", _remove_discord_channel_alias),
+    ))
+
+    for w in _section_label("Read Settings", "How long Discord stays visible after a 'discord check' command."):
+        discord_vl.addWidget(w)
+
+    dur_card = _card_frame()
+    dur_cvl = QVBoxLayout(dur_card)
+    dur_cvl.setContentsMargins(12, 8, 12, 8)
+    dur_lbl = QLabel("Read duration (seconds)")
+    dur_lbl.setStyleSheet(f"color: {_TEXT}; min-width: 180px;")
+    dur_edit = _make_entry(60, "5")
+    dur_edit.setText(str(discord_read_duration_var.get()))
+    from PySide6.QtGui import QIntValidator
+    dur_edit.setValidator(QIntValidator(1, 60))
+    def _on_dur_changed(v):
+        try:
+            discord_read_duration_var.set(max(1, int(v)) if v.isdigit() else 5)
+        except Exception:
+            pass
+    dur_edit.textChanged.connect(_on_dur_changed)
+    dur_cvl.addWidget(_hrow(dur_lbl, dur_edit))
+    discord_vl.addWidget(dur_card)
     discord_vl.addStretch()
 
     # =====================================================================
@@ -1880,6 +2001,16 @@ _danger_btn("Remove Selected", _remove_app),
         stack.setCurrentIndex(idx)
         for i, btn in enumerate(_nav_btns):
             btn.setIcon(_tint_icon(_NAV_ITEMS[i][0], _COLOR_ACTIVE[0] if i == idx else _COLOR_INACTIVE))
+        # Pause background when not on home tab, resume when returning (unless gaming mode is active)
+        if idx == 0:
+            try:
+                from skills import _gaming_mode as _gm_nav
+                if not _gm_nav.get("value"):
+                    _bg_resume()
+            except Exception:
+                _bg_resume()
+        else:
+            _bg_pause()
 
     for _ni, (_icon_file, _icon_label) in enumerate(_NAV_ITEMS):
         _nav_btn = QPushButton()
@@ -2193,6 +2324,10 @@ _danger_btn("Remove Selected", _remove_app),
         lang_combo.setCurrentText(language.get())
         ptt_edit.setText(ptt_key_display.get())
         se_edit.setText(search_engine.get())
+        _br_val = preferred_browser.get()
+        _br_disp = _br_val.title() if _br_val != "default" else "Default (OS)"
+        if _br_disp in [br_combo.itemText(i) for i in range(br_combo.count())]:
+            br_combo.setCurrentText(_br_disp)
         bv_slider.setValue(int(ptt_beep_volume.get()))
         voice_combo.setCurrentText(tts_voice.get())
         confirm_chk.setChecked(bool(confirm_actions.get()))
@@ -2215,6 +2350,7 @@ _danger_btn("Remove Selected", _remove_app),
         "apps_textbox": apps_textbox,
         "aliases_textbox": aliases_textbox,
         "discord_aliases_textbox": discord_aliases_textbox,
+        "discord_channel_aliases_textbox": discord_channel_aliases_textbox,
         "actions_textbox": actions_textbox,
         "history_textbox": history_textbox,
         "keybinds_textbox": keybinds_textbox,

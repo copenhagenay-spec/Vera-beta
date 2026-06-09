@@ -6,89 +6,83 @@ This guide explains how to set up the Discord voice commands in SH|RA.
 
 ## Overview
 
-SH|RA can send and read Discord messages by voice using Discord webhooks. This feature is intended for **server owners and administrators** as it requires the ability to create webhooks in your server.
+SH|RA sends Discord messages by controlling your open Discord client — no bots, no webhooks, no server permissions needed. It works for DMs, group DMs, and server channels.
 
 | What to say | What happens |
 |---|---|
-| `discord <channel> <message>` | Sends a message to a channel |
-| `read discord <channel>` | Reads the last message in a channel aloud |
+| `discord dm <name> <message>` | Sends a DM to a contact in your alias list |
+| `discord <name> <message>` | Sends to a contact or channel alias |
+| `discord read <name>` | Navigates to the conversation so you can read it, then tabs back after a set delay |
+
+> **Important:** SH|RA will only send to names you have configured in the Discord tab. If the name isn't recognized she will tell you and stop — she will not guess or fall back to sending to the wrong person.
 
 ---
 
 ## Requirements
 
-- You must have **Administrator** or **Manage Webhooks** permission in the Discord server
-- The channels you want to use must have webhooks created for them
+- Discord must be **open** on your PC when you use these commands
+- The contact or channel you want to message must be added to your alias list in the Discord tab
 
 ---
 
-## Step 1 — Create a Webhook
+## Setting Up DM Contacts
 
-For each channel you want SH|RA to send messages to:
-
-1. Open Discord and go to your server
-2. Right-click the channel → **Edit Channel**
-3. Go to the **Integrations** tab
-4. Click **Webhooks** → **New Webhook**
-5. Give it a name (e.g. "SH|RA") and click **Copy Webhook URL**
-6. Click **Save**
-
----
-
-## Step 2 — Get Your Server and Channel IDs
-
-To enable the **read discord** command you'll need your Server ID and Channel ID.
-
-**Enable Developer Mode first:**
-1. Open Discord → **User Settings** → **Advanced**
-2. Toggle on **Developer Mode**
-
-**Get your Server ID:**
-- Right-click your server icon → **Copy Server ID**
-
-**Channel name:**
-- SH|RA uses the channel name directly — just use the name as it appears in Discord (e.g. "general", "announcements")
-
----
-
-## Step 3 — Configure SH|RA
+DM contacts let you send direct messages by saying a person's name.
 
 1. Open the SH|RA UI
 2. Go to the **Discord** tab
-3. Under **Channels**, fill in:
-   - **Channel name** — what you'll say in the voice command (e.g. "general")
-   - **Server nickname** — optional, used for multi-server targeting
-   - **Webhook URL** — the webhook URL you copied in Step 1
-   - Click **Add Channel**
-4. Under **Bot Credentials**, fill in:
-   - **Bot Token** — required for reading messages (see below)
-   - **Server ID** — your Discord server ID
-5. Click **Save**
+3. Under **DM Contacts**, fill in:
+   - **Nickname** — what you'll say out loud (e.g. `jake`)
+   - **Discord Username** — their exact Discord username (e.g. `jake#1234` or `jake` for new-style usernames)
+4. Click **Add**
+
+**To send:** Say `discord dm jake hey are you on?` — SH|RA will open Discord, navigate to their DM, and send the message.
 
 ---
 
-## Bot Token (for Read Discord)
+## Setting Up Channel & Group DM Aliases
 
-Reading messages requires a Discord bot token. This is an advanced feature intended for server owners, administrators, and developers — the send command works with just the webhook and does not require a bot token.
+Channel aliases let you send to server channels or group DMs by a spoken name.
 
-To get a bot token:
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
-2. Click **New Application** and give it a name
-3. Go to the **Bot** tab → click **Add Bot**
-4. Under **Token** click **Copy**
-5. Paste it into the **Bot Token** field in SH|RA settings
+1. Open the SH|RA UI
+2. Go to the **Discord** tab
+3. Under **Channel & Group DM Aliases**, fill in:
+   - **Nickname** — what you'll say out loud (e.g. `general`, `squad chat`)
+   - **Channel ID** — the channel or group DM ID from Discord
+4. Click **Add**
 
-> ⚠️ **Important:** Your bot token grants full access to your bot — treat it like a password. Never share it publicly, post it in a Discord server, or commit it to a public repository. If your token is ever leaked, reset it immediately in the Discord Developer Portal.
+**To get a Channel ID:**
+1. Open Discord → **User Settings** → **Advanced** → enable **Developer Mode**
+2. Right-click the channel or group DM → **Copy Channel ID**
+
+**To send:** Say `discord general anyone on?` — SH|RA navigates to that channel and sends the message.
+
+---
+
+## Discord Read
+
+The read command navigates Discord to the contact or channel so you can read recent messages yourself, then automatically tabs back to your game after a configurable delay.
+
+| Setting | Location |
+|---|---|
+| Read duration | Discord tab → **Read Duration** (default: 5 seconds) |
+
+**To use:** Say `discord read jake` or `discord read general`.
+
+> **Note:** This navigates your Discord window — make sure Discord is visible (not minimized) or this command may not work as expected.
 
 ---
 
 ## Troubleshooting
 
-**"SH|RA said the message failed to send"**
-- Double check your webhook URL is correct and hasn't been deleted
-- Make sure you have an active internet connection
+**"SH|RA said she doesn't have that person in contacts"**
+- Add them in Settings → Discord → DM Contacts or Channel Aliases
+- Check that the nickname you said matches exactly what you configured (SH|RA normalizes common variations but exact matches are most reliable)
 
-**"Read discord isn't working"**
-- Make sure your bot token is entered correctly
-- Verify the Server ID and Channel ID are correct
-- The bot must be a member of your server to read messages
+**"The message sent to the wrong place"**
+- This shouldn't happen — SH|RA hard-fails if the name isn't in your alias list
+- If it did happen, check for duplicate or similarly-named aliases in your list
+
+**"Nothing happens when I say discord send"**
+- Make sure Discord is open and not minimized
+- Check that the alias is configured in the Discord tab

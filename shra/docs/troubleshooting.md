@@ -90,27 +90,33 @@ Common issues and how to fix them. If your problem isn't listed here, submit a b
 
 ## Discord
 
-**"Messages aren't sending"**
-- Check that your webhook URL is correct and hasn't been deleted from Discord
-- Make sure you have an active internet connection
-- See [Discord Setup](discord.md) to verify your configuration
+**"SH|RA said she doesn't have that person in contacts"**
+- Add the contact in Settings → Discord → DM Contacts or Channel Aliases
+- Make sure the nickname you said matches what you configured
 
-**"Read discord isn't working"**
-- Reading messages requires a bot token — webhook alone is not enough
-- Make sure your bot is a member of the server and has access to the channel
-- See [Discord Setup](discord.md) for full bot setup instructions
+**"Messages aren't sending"**
+- Make sure Discord is open and not minimized
+- Check the alias is listed in the Discord tab
+- See [Discord Setup](discord.md) for configuration details
+
+**"Read discord isn't navigating"**
+- Discord must be open and visible — it won't work if Discord is minimized
+- Check the contact or channel alias is configured in the Discord tab
 
 ---
 
 ## Overlay
 
-**"The overlay isn't showing"**
-- Say "show overlay" or press your assigned hotkey
-- If it's off-screen, change the position in **Settings → Game Overlay** to Top Left
+**"The widgets aren't showing"**
+- Say `show overlay` or press your hotkey to enter edit mode
+- If cards appear off-screen, enter edit mode and drag them back into view
 
-**"The overlay is interfering with my game"**
-- The overlay is click-through by design and should not block input
-- If you're having issues, try repositioning it or hiding it with "hide overlay"
+**"My widget positions reset after restart"**
+- Positions save when you hide the overlay — make sure you said `hide overlay` or pressed the hotkey to lock them, rather than closing the app directly
+
+**"The overlay is blocking my game input"**
+- Overlay cards are click-through by default — only the Now Playing card is interactive (so the buttons work)
+- Pin the Now Playing card to a corner out of your main play area
 
 ---
 

@@ -375,5 +375,22 @@ def currently_playing() -> str | None:
         return None
 
 
+def now_playing_info() -> tuple[str | None, str | None, bool]:
+    """Return (track_name, artist_name, is_playing). All None/False when nothing playing."""
+    try:
+        result = _api("GET", "/me/player/currently-playing")
+        if not result:
+            return None, None, False
+        item = result.get("item")
+        if not item:
+            return None, None, False
+        track  = item.get("name") or None
+        artist = (item.get("artists") or [{}])[0].get("name") or None
+        playing = bool(result.get("is_playing", False))
+        return track, artist, playing
+    except Exception:
+        return None, None, False
+
+
 def is_authenticated() -> bool:
     return get_valid_token() is not None
