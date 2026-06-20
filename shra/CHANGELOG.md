@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.99.9.9.1 — The Polish Update
+- Added: New theme — Glacier (cyan/ice blue tones).
+- Added: "Lock my pc" voice command — locks Windows instantly with no confirmation needed.
+- Added: Unrecognized commands now route to the AI for a natural conversational response instead of a generic fallback — if SH|RA can't match a command she'll respond intelligently instead of saying she didn't understand.
+- Changed: Media controls (play/pause/skip/previous) and the Now Playing widget no longer depend on the Spotify Web API — they now run entirely through Windows' own media session controls, working with any app (Spotify, browser, etc.) with no login, no API keys, and no Premium requirement.
+- Fixed: "Open [app]" no longer errors when the app isn't found — unrecognized open commands now fall through to the AI naturally (e.g. "open the window" becomes a conversation instead of a failed command).
+- Fixed: Filler word stripper removed — it was too aggressive and was stripping connective words like "right", "write", "on", "that" which broke casual sentence meaning and caused misrouting.
+- Fixed: "Spotify play [song]" no longer fails silently — it now opens the search results in the local Spotify app.
+
 ## 0.99.9.9 — Hotfix
 - Added: Discord check (Plus+) — say "discord read [channel/nickname]" to have SH|RA navigate to the conversation so you can read it yourself, then automatically tab back. Duration is configurable in Discord settings (default 5 seconds).
 - Fixed: Discord send now works reliably on slower machines. Increased timing between channel navigation and message send to prevent Enter firing before Discord's message box is ready.
