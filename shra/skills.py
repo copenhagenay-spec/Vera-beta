@@ -527,27 +527,18 @@ def _media_key(action: str) -> bool:
         return False
 
 def _spotify_search(query: str) -> bool:
+    # No Spotify Web API dependency — opens the local app's search directly.
+    # Can't auto-play a specific track without the API, but this always works
+    # with no login, no API keys, and no dependency on Spotify's developer program.
     try:
-        from spotify import play as _sp_play, is_authenticated as _sp_auth, authenticate as _sp_auth_flow
-        if not _sp_auth():
-            # Not authenticated — fall back to URI scheme
-            import webbrowser
-            if query:
-                webbrowser.open(f"spotify:search:{quote_plus(query)}")
-            else:
-                webbrowser.open("spotify:")
-            return True
-        return _sp_play(query)
+        import webbrowser
+        if query:
+            webbrowser.open(f"spotify:search:{quote_plus(query)}")
+        else:
+            webbrowser.open("spotify:")
+        return True
     except Exception:
-        try:
-            import webbrowser
-            if query:
-                webbrowser.open(f"spotify:search:{quote_plus(query)}")
-            else:
-                webbrowser.open("spotify:")
-            return True
-        except Exception:
-            return False
+        return False
 
 
 def _youtube_search(query: str) -> bool:
@@ -747,6 +738,17 @@ def dismiss_unmatched(raw_text: str) -> None:
         json.dump(entries, f, indent=2, ensure_ascii=False)
 
 
+def clear_unmatched() -> None:
+    """Wipe the unmatched log — called on startup to prevent session bloat."""
+    import json
+    try:
+        os.makedirs(os.path.dirname(_UNMATCHED_PATH), exist_ok=True)
+        with open(_UNMATCHED_PATH, "w", encoding="utf-8") as f:
+            json.dump([], f)
+    except Exception:
+        pass
+
+
 # Merge user corrections into the built-in map at import time
 _MISHEAR_MAP.update(_load_user_mishears())
 
@@ -800,9 +802,7 @@ def preprocess_transcript(text: str) -> str:
     t = re.sub(r"[^\w\s]", "", t)
     # 2. Apply mishear corrections
     t = _apply_mishear_corrections(t)
-    # 3. Strip filler words
-    t = _FILLER_WORDS.sub("", t)
-    # 4. Collapse extra whitespace
+    # 3. Collapse extra whitespace
     t = re.sub(r"\s+", " ", t).strip()
     # 5. Strip conversational prefixes ("can you", "hey shira", "i need you to", etc.)
     #    Loop to handle stacked prefixes e.g. "hey shira can you open discord"
@@ -1047,125 +1047,6 @@ _help_win_ref: list = []
 
 def _show_help() -> None:
     cfg = load_config()
-    lines = [
-        "=== Built-in Commands ===",
-        "",
-        "Apps & Actions:",
-        "  open <app>  /  launch <app>",
-        "  open that again",
-        "  close <app>  /  close this",
-        "  add alias <name> for <app>",
-        "",
-        "Web:",
-        "  search for <query>",
-        "  web search for <query>",
-        "",
-        "YouTube:",
-        "  open youtube",
-        "  youtube <query>",
-        "  youtube play / pause / next / back",
-        "",
-        "Media (Spotify / general):",
-        "  play / pause",
-        "  skip / next",
-        "  back / previous",
-        "  sound on / sound off",
-        "",
-        "Volume:",
-        "  mute / unmute",
-        "  volume up / volume down",
-        "  set volume <0-100>",
-        "  set volume max",
-        "  set <app> volume <0-100>",
-        "",
-        "Timers:",
-        "  set a timer <n> minutes",
-        "  set a timer <n> seconds",
-        "  set a timer <n> hours",
-        "  cancel timer",
-        "",
-        "Reminders:",
-        "  remind me in <n> minutes to <message>",
-        "  remind me at <time> to <message>",
-        "  what are my reminders",
-        "  cancel all reminders",
-        "",
-        "Notes:",
-        "  note <text>",
-        "  open notes",
-        "  list notes",
-        "  delete last note",
-        "  clear all notes",
-        "",
-        "Clipboard:",
-        "  read clipboard",
-        "  copy that / copy selection",
-        "  copy <text>",
-        "  paste that / paste clipboard",
-        "  clear clipboard",
-        "",
-        "Time & Info:",
-        "  what time is it",
-        "  what's the date / what day is it",
-        "  what's the weather in <city>",
-        "  give me the news",
-        "",
-        "SH|RA:",
-        "  be quiet / silence",
-        "  you can talk / wake up shira",
-        "",
-        "System:",
-        "  sleep computer",
-        "  restart computer",
-        "  shut down computer",
-        "  restart assistant",
-        "  type <text>",
-        "  send message <text>",
-        "",
-        "Discord:",
-        "  discord <channel> <message>",
-        "  discord dm <nickname> <message>",
-        "  discord read <channel/nickname>  [Plus+]",
-        "",
-        "AI:",
-        "  ask <question>",
-        "",
-        "Memory:",
-        "  my name is <name>",
-        "  my birthday is <month> <day>",
-        "  remember <fact>",
-        "  forget <thing>",
-        "  what do you know about me",
-        "  what do you remember",
-        "",
-        "Key Binds:",
-        "  <your phrase>  (configured in Actions tab)",
-        "",
-        "Conversation:",
-        "  i'm tired / i'm happy / i'm stressed",
-        "  i'm playing <game>",
-        "  tell me a joke",
-        "",
-        "Help:",
-        "  what can i say",
-    ]
-
-    apps = cfg.get("apps", {})
-    if isinstance(apps, dict) and apps:
-        lines.append("")
-        lines.append("=== Your Apps ===")
-        for name in sorted(apps.keys()):
-            lines.append(f"  open {name}")
-
-    actions = cfg.get("actions", [])
-    if isinstance(actions, list) and actions:
-        lines.append("")
-        lines.append("=== Custom Actions ===")
-        for a in actions:
-            phrase = a.get("phrase", "").strip()
-            if phrase:
-                lines.append(f"  {phrase}")
-
     SECTIONS = [
         ("Apps & Actions", [
             "open <app>  /  launch <app>",
@@ -1182,9 +1063,10 @@ def _show_help() -> None:
             "youtube <query>  /  youtube play <query>",
             "youtube play / pause / next / back",
         ]),
-        ("Spotify", [
-            "spotify <query>  /  spotify play <query>",
+        ("Media", [
+            "spotify <query>  (opens search results in Spotify)",
             "play / pause  /  skip / next  /  back / previous",
+            "what's playing",
             "sound on / sound off",
         ]),
         ("Volume", [
@@ -1227,6 +1109,7 @@ def _show_help() -> None:
             "you can talk  /  wake up shira",
         ]),
         ("System", [
+            "lock my pc",
             "sleep computer",
             "restart computer  /  shut down computer",
             "restart assistant",
@@ -2364,13 +2247,31 @@ def _ih_type(m, t, allow_prompt, confirm_fn, restart_fn):
 # --- Discord read ---
 @_intent(804, r"\bdiscord\s+read\s+(.+)$")
 def _ih_discord_read(m, t, allow_prompt, confirm_fn, restart_fn):
+    from license import get_tier
+    if get_tier() == "free":
+        _tts_speak("Discord features require a Plus license or higher.")
+        return True
     target = m.group(1).strip()
     cfg = load_config()
-    search = target
+    search = None
+
+    # Check DM contacts
     for a in cfg.get("discord_aliases", []):
         if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
             search = f"@{a.get('username', target)}"
             break
+
+    # Check channel/group DM aliases
+    if search is None:
+        for a in cfg.get("discord_channel_aliases", []):
+            if _normalize_name(a.get("nickname", "")) == _normalize_name(target):
+                search = a.get("channel_id")
+                break
+
+    if search is None:
+        _tts_speak(f"I don't have {target} in your contacts or channels. Add them in settings first.")
+        return True
+
     threading.Thread(target=_discord_read_keyboard, args=(search,), daemon=True).start()
     return True
 
@@ -2541,6 +2442,17 @@ def _ih_sleep_pc(m, t, allow_prompt, confirm_fn, restart_fn):
     return True
 
 
+# --- Lock PC ---
+@_intent(705, r"\b(lock (the )?(pc|computer|screen)|lock my (pc|computer|screen))\b")
+def _ih_lock_pc(m, t, allow_prompt, confirm_fn, restart_fn):
+    try:
+        import ctypes
+        ctypes.windll.user32.LockWorkStation()
+    except Exception as exc:
+        _log_event(f"LOCK_PC_FAILED: {exc}")
+    return True
+
+
 # --- Mute ---
 @_intent(660, r"\b(mute|mute audio|mute volume|sound off|audio off|volume off|turn sound off|turn audio off)\b")
 def _ih_mute(m, t, allow_prompt, confirm_fn, restart_fn):
@@ -2654,28 +2566,6 @@ def _ih_app_volume(m, t, allow_prompt, confirm_fn, restart_fn):
 
 
 # --- YouTube: open ---
-@_intent(601, r"\b(connect|link|setup|authenticate|reconnect)\s+spotify\b")
-def _ih_spotify_auth(m, t, allow_prompt, confirm_fn, restart_fn):
-    try:
-        from spotify import authenticate as _sp_auth, clear_tokens as _sp_clear
-        _sp_clear()
-        _tts_speak("Opening Spotify login — approve it in your browser")
-        _wait_for_tts()
-        def _do_auth():
-            try:
-                success = _sp_auth()
-                if success:
-                    _tts_speak("Spotify connected, you're good to go")
-                else:
-                    _tts_speak("Spotify connection failed, try again")
-            except Exception:
-                _tts_speak("Couldn't connect to Spotify")
-        threading.Thread(target=_do_auth, daemon=True).start()
-    except Exception:
-        _tts_speak("Couldn't connect to Spotify")
-    return True
-
-
 @_intent(600, r"\b(open|start|launch)\s+(you\s*tube|youtube|yt)\b")
 def _ih_youtube_open(m, t, allow_prompt, confirm_fn, restart_fn):
     return bool(_youtube_search(""))
@@ -2690,9 +2580,12 @@ def _ih_youtube_search(m, t, allow_prompt, confirm_fn, restart_fn):
         query = play_search.group(1).strip()
     if query in ("open", "home"):
         return bool(_youtube_search(""))
-    if query not in ("play", "pause", "next", "skip", "previous", "back"):
-        if _youtube_search(query):
-            return True
+    # Control words — handle here so they don't fall through to Spotify
+    control_map = {"play": "play_pause", "pause": "play_pause", "next": "next", "skip": "next", "previous": "previous", "back": "previous"}
+    if query in control_map:
+        return bool(_media_key(control_map[query]))
+    if _youtube_search(query):
+        return True
     return False
 
 
@@ -2841,23 +2734,16 @@ def _ih_spotify(m, t, allow_prompt, confirm_fn, restart_fn):
                 if _spotify_search(query):
                     return True
 
-    # Try Spotify API for transport controls first, fall back to media keys
-    try:
-        from spotify import is_authenticated as _sp_auth, pause as _sp_pause, next_track as _sp_next, previous_track as _sp_prev, play as _sp_play, currently_playing as _sp_now
-        _sp_authed = _sp_auth()
-    except Exception:
-        _sp_authed = False
-
     if re.search(r"\bwhat(?:'?s| is) playing\b", t):
-        if _sp_authed:
-            try:
-                from spotify import currently_playing as _sp_now
-                track = _sp_now()
-                _tts_speak(track if track else "Nothing playing right now")
-            except Exception:
-                _tts_speak("Can't check right now")
-        else:
-            _tts_speak("Spotify isn't connected yet")
+        try:
+            from media_session import now_playing_info as _now_playing
+            track, artist, _ = _now_playing()
+            if track:
+                _tts_speak(f"{track} by {artist}" if artist else track)
+            else:
+                _tts_speak("Nothing playing right now")
+        except Exception:
+            _tts_speak("Can't check right now")
         return True
 
     action = None
@@ -2869,21 +2755,6 @@ def _ih_spotify(m, t, allow_prompt, confirm_fn, restart_fn):
         action = "next"
     elif re.search(r"\b(previous|back|rewind)(\s+(song|track))?\b", t):
         action = "previous"
-
-    if action and _sp_authed:
-        try:
-            from spotify import pause as _sp_pause, next_track as _sp_next, previous_track as _sp_prev, play as _sp_play
-            if action == "pause":
-                _sp_pause()
-            elif action == "play":
-                _sp_play()
-            elif action == "next":
-                _sp_next()
-            elif action == "previous":
-                _sp_prev()
-            return True
-        except Exception:
-            pass
 
     if action:
         return bool(_media_key("play_pause" if action in ("play", "pause") else action))
@@ -2954,10 +2825,8 @@ def _ih_open_app(m, t, allow_prompt, confirm_fn, restart_fn):
         _ss("last_app", app)
         _prc("opened app", app)
         _shra_confirm("open")
-    else:
-        _shra_failure("open")
-        result = True
-    return result
+        return True
+    return False
 
 
 # --- Search ---
@@ -3483,5 +3352,24 @@ def handle_transcript(text: str, allow_prompt: bool = True, confirm_fn=None, res
 
     log_unmatched(t)
     if not _gaming_mode["value"]:
+        try:
+            from llm import shra_chat as _llm_chat
+            from config import load_config as _lc
+            _ctx = {}
+            try:
+                from memory import get_session as _gs, recall_all as _ra
+                _ctx["name"] = _gs("name") or ""
+                _ctx["last_app"] = _gs("last_app") or ""
+            except Exception:
+                pass
+            _key = _lc().get("gemini_api_key", "").strip()
+            _mode = _lc().get("personality", "default")
+            if _key:
+                _reply = _llm_chat(text, mode=_mode, context=_ctx)
+                if _reply:
+                    _tts_speak(_reply)
+                    return False
+        except Exception:
+            pass
         _tts_speak(get_fallback())
     return False

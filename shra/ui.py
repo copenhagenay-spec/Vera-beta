@@ -78,6 +78,15 @@ _PREMIUM_THEMES: dict[str, dict] = {
         "card_surface": "#0e1a10",
         "title_color": "#c8ffe8",
     },
+    "Glacier": {
+        "folder": "glacier",
+        "icon_active": "#2ab8c8",
+        "accent_rgb":  (42, 184, 200),
+        "button_rgb":  (26, 138, 150),
+        "gradient": "stop:0 #0d1418, stop:1 #0e1820",
+        "card_surface": "#0e1820",
+        "title_color": "#a8eef5",
+    },
 }
 
 
@@ -1797,7 +1806,7 @@ _danger_btn("Remove Selected", _remove_app),
     training_area, _, training_vl = _scrollable_tab()
     stack.addWidget(training_area)
 
-    from skills import load_unmatched, save_user_mishear, dismiss_unmatched, load_groq_handled, dismiss_groq_handled
+    from skills import load_unmatched, save_user_mishear, dismiss_unmatched
 
     for w in _section_label("Mishear Training", "Transcripts SH|RA didn't understand. Select one, type what you meant, and save."):
         training_vl.addWidget(w)
@@ -1857,59 +1866,26 @@ _danger_btn("Remove Selected", _remove_app),
         correction_entry.clear()
         _refresh_unmatched()
 
+    def _clear_all_unmatched():
+        import json, os as _os
+        from skills import _UNMATCHED_PATH
+        try:
+            with open(_UNMATCHED_PATH, "w", encoding="utf-8") as f:
+                json.dump([], f)
+        except Exception:
+            pass
+        _selected_mishear[0] = None
+        correction_entry.clear()
+        _refresh_unmatched()
+
     training_vl.addWidget(_hrow(
         _primary_btn("Save Correction", _save_correction),
         _secondary_btn("Dismiss", _dismiss_selected),
         _muted_btn("Refresh", _refresh_unmatched),
+        _danger_btn("Clear All", _clear_all_unmatched),
     ))
     saved_hint = _hint_label("Saved corrections take effect immediately — no restart needed.")
     training_vl.addWidget(saved_hint)
-
-    for w in _section_label("Groq Handled", "Things SH|RA answered via AI that could become real skills."):
-        training_vl.addWidget(w)
-    groq_listbox = _make_listbox(8)
-    training_vl.addWidget(groq_listbox)
-
-    _selected_groq = [None]
-
-    def _refresh_groq_handled():
-        groq_listbox.clear()
-        for e in load_groq_handled():
-            groq_listbox.addItem(e)
-
-    _refresh_groq_handled()
-
-    def _on_groq_select():
-        sel = groq_listbox.selectedItems()
-        if sel:
-            _selected_groq[0] = sel[0].text()
-
-    groq_listbox.itemSelectionChanged.connect(_on_groq_select)
-
-    def _dismiss_groq():
-        entry = _selected_groq[0]
-        if not entry:
-            return
-        dismiss_groq_handled(entry)
-        _selected_groq[0] = None
-        _refresh_groq_handled()
-
-    def _clear_all_groq():
-        import json, os as _os
-        from skills import _GROQ_HANDLED_PATH
-        try:
-            with open(_GROQ_HANDLED_PATH, "w", encoding="utf-8") as f:
-                json.dump([], f)
-        except Exception:
-            pass
-        _selected_groq[0] = None
-        _refresh_groq_handled()
-
-    training_vl.addWidget(_hrow(
-        _secondary_btn("Dismiss Selected", _dismiss_groq),
-        _danger_btn("Clear All", _clear_all_groq),
-        _muted_btn("Refresh", _refresh_groq_handled),
-    ))
     training_vl.addStretch()
 
     # =====================================================================

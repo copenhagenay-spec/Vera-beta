@@ -643,6 +643,12 @@ def main() -> None:
             pass
 
 
+    try:
+        from skills import clear_unmatched as _clear_unmatched
+        _clear_unmatched()
+    except Exception:
+        pass
+
     _test_update_alert = "--test-update-alert" in sys.argv
 
     cfg = load_config()

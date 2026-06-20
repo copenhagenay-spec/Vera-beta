@@ -571,7 +571,7 @@ class NowPlayingCard(_OverlayCard):
         import threading
         def _go():
             try:
-                from spotify import previous_track
+                from media_session import previous_track
                 previous_track()
             except Exception:
                 pass
@@ -587,21 +587,21 @@ class NowPlayingCard(_OverlayCard):
 
         def _go():
             try:
-                from spotify import pause, play
+                from media_session import pause, play
                 if should_play:
                     play()
                 else:
                     pause()
             except Exception:
                 pass
-            QTimer.singleShot(1000, self._poll)  # 1s for Spotify to settle before syncing
+            QTimer.singleShot(1000, self._poll)  # 1s for the session to settle before syncing
         threading.Thread(target=_go, daemon=True).start()
 
     def _on_next(self) -> None:
         import threading
         def _go():
             try:
-                from spotify import next_track
+                from media_session import next_track
                 next_track()
             except Exception:
                 pass
@@ -613,14 +613,7 @@ class NowPlayingCard(_OverlayCard):
 
     def _poll(self) -> None:
         try:
-            from spotify import now_playing_info, is_authenticated
-            if not is_authenticated():
-                self._track_lbl.setText("Spotify not connected")
-                self._track_lbl.setStyleSheet(_NP_IDLE_STYLE)
-                self._artist_lbl.setVisible(False)
-                self._play_btn.setText("▶")  # noqa: keep as play symbol
-                self.adjustSize()
-                return
+            from media_session import now_playing_info
             track, artist, playing = now_playing_info()
         except Exception:
             self._track_lbl.setText("Nothing playing")
